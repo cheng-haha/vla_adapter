@@ -55,7 +55,6 @@ def load(
     cache_dir: Optional[Union[str, Path]] = None,
     load_for_training: bool = False,
     image_sequence_len: Optional[int] = None,
-    llm_local_path: Optional[str] = None,
 ) -> PrismaticVLM:
     """Loads a pretrained PrismaticVLM from either local disk or the HuggingFace Hub."""
 
@@ -112,7 +111,6 @@ def load(
         llm_max_length=model_cfg.get("llm_max_length", 2048),
         hf_token=hf_token,
         inference_mode=not load_for_training,
-        local_path=llm_local_path,
     )
 
     # Load VLM using `from_pretrained` (clobbers HF syntax... eventually should reconcile)
@@ -138,7 +136,6 @@ def load_vla(
     step_to_load: Optional[int] = None,
     model_type: str = "pretrained",
     image_sequence_len: Optional[int] = None,
-    llm_local_path: Optional[str] = None,
 ) -> OpenVLA:
     """Loads a pretrained OpenVLA from either local disk or the HuggingFace Hub."""
 
@@ -236,7 +233,6 @@ def load_vla(
         llm_max_length=model_cfg.llm_max_length,
         hf_token=hf_token,
         inference_mode=not load_for_training,
-        local_path=llm_local_path,
     )
 
     # Create Action Tokenizer

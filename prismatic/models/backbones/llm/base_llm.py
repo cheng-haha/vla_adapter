@@ -109,7 +109,6 @@ class HFCausalLLMBackbone(LLMBackbone, ABC):
         hf_token: Optional[str] = None,
         inference_mode: bool = False,
         use_flash_attention_2: bool = False,
-        local_path: Optional[str] = None,
     ) -> None:
         super().__init__(llm_backbone_id)
         self.llm_family = llm_family
@@ -121,7 +120,7 @@ class HFCausalLLMBackbone(LLMBackbone, ABC):
         if not self.inference_mode:
             overwatch.info(f"Loading [bold]{llm_family}[/] LLM from [underline]`{hf_hub_path}`[/]", ctx_level=1)
             self.llm = llm_cls.from_pretrained(
-                hf_hub_path if local_path is None else local_path,
+                hf_hub_path,
                 token=hf_token,
                 use_flash_attention_2=use_flash_attention_2 if not self.inference_mode else False,
                 # The following parameters are set to prevent `UserWarnings` from HF; we want greedy decoding!
@@ -133,7 +132,7 @@ class HFCausalLLMBackbone(LLMBackbone, ABC):
         # [Contract] `inference_mode` means we're loading from a pretrained checkpoint; no need to load base weights!
         else:
             overwatch.info(f"Building empty [bold]{llm_family}[/] LLM from [underline]`{hf_hub_path}`[/]", ctx_level=1)
-            llm_config = AutoConfig.from_pretrained(hf_hub_path if local_path is None else local_path, token=hf_token)
+            llm_config = AutoConfig.from_pretrained(hf_hub_path, token=hf_token)
 
             # versioning difference for prismatic models.
             if hasattr(llm_cls, "from_config"):
@@ -156,7 +155,7 @@ class HFCausalLLMBackbone(LLMBackbone, ABC):
         # Load (Fast) Tokenizer
         overwatch.info(f"Loading [bold]{llm_family}[/] (Fast) Tokenizer via the AutoTokenizer API", ctx_level=1)
         self.tokenizer = AutoTokenizer.from_pretrained(
-            hf_hub_path if local_path is None else local_path, model_max_length=self.llm_max_length, token=hf_token, padding_side="right"
+            hf_hub_path, model_max_length=self.llm_max_length, token=hf_token, padding_side="right"
         )
 
         # Validation =>> Our VLM logic currently operates under the assumption that the tokenization of a new input
