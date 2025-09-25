@@ -19,7 +19,7 @@ from prismatic.models.backbones.llm.prompting.qwen_prompter import QwenPromptBui
 QWEN25_MODELS = {
     # === Pure Qwen2.5 (non-instruct/chat-tuned) Models ===
     "qwen25-0_5b-extra": {
-        "llm_family": "qwen2.5", "llm_cls": AutoModelForCausalLM, "hf_hub_path": "Qwen/Qwen2.5-0.5B"
+        "llm_family": "qwen2.5", "llm_cls": AutoModelForCausalLM, "hf_hub_path": "/inspire/hdd/global_user/chengdongzhou-240108390137/ai_models/Qwen/Qwen2.5-0.5B"
     },
     "qwen25-0_5b-pure": {
         "llm_family": "qwen2.5", "llm_cls": AutoModelForCausalLM, "hf_hub_path": "Qwen/Qwen2.5-0.5B"

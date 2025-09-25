@@ -15,7 +15,7 @@ export PYTHONPATH=$ROOT_PATH/vla_projects/$PROJECT_PATH
 #========== Training Configuration ==========#
 # Dataset and paths
 data_name=libero_4_task_suites_no_noops
-data_root_dir=data/libero
+data_root_dir=$ROOT_PATH/datasets/openvla/modified_libero_rlds
 vlm_path=$ROOT_PATH/ai_models/Stanford-ILIAD/prism-qwen25-extra-dinosiglip-224px-0_5b
 config_file_path=pretrained_models/configs
 

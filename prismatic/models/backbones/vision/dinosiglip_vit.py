@@ -53,7 +53,7 @@ class DinoSigLIPImageTransform:
 def find_hf_checkpoint(model_dir: Path) -> Path:
     """Find the model checkpoint file within a Hugging Face Hub cache directory."""
     # Check for model file in the main directory
-    for pattern in ["*.safetensors", "*.bin"]:
+    for pattern in ["*.bin"]:
         if files := list(model_dir.glob(pattern)):
             return files[0]
 
@@ -66,7 +66,7 @@ def find_hf_checkpoint(model_dir: Path) -> Path:
 
         # Use the most recently modified snapshot directory
         latest_snapshot = max(snapshot_dirs, key=lambda d: d.stat().st_mtime)
-        for pattern in ["*.safetensors", "*.bin"]:
+        for pattern in [ "*.bin"]:
             if files := list(latest_snapshot.glob(pattern)):
                 return files[0]
 
@@ -104,8 +104,8 @@ class DinoSigLIPViTBackbone(VisionBackbone):
                 siglip_model_local_path = siglip_model_name
             # Construct paths assuming huggingface-hub cache structure.
             # e.g. models--timm--vit_large_patch14_reg4_dinov2.lvd142m
-            dino_dir = Path(vision_models_path) / f"models--timm--{dino_model_name}"
-            siglip_dir = Path(vision_models_path) / f"models--timm--{siglip_model_local_path}"
+            dino_dir = Path(vision_models_path) / f"{dino_model_name}"
+            siglip_dir = Path(vision_models_path) / f"{siglip_model_local_path}"
 
             dino_checkpoint = find_hf_checkpoint(dino_dir)
             siglip_checkpoint = find_hf_checkpoint(siglip_dir)
