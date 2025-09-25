@@ -1,2 +1,0 @@
-bash run_scripts/ffn_q2a/aloha_subtasks/test_aloha_robotwin2_ffn_25_moe.sh
-bash run_scripts/ffn_q2a/aloha_subtasks/test_aloha_robotwin2_ffn_25_moe2.sh

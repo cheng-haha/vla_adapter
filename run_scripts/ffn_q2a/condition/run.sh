@@ -1,2 +1,0 @@
-bash run_scripts/ffn_q2a/condition/exinner2_text_condition_l2norm_2layer.sh
-bash run_scripts/ffn_q2a/condition/exinner2_text_condition_l2norm_4layer.sh

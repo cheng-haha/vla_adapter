@@ -1,2 +1,0 @@
-bash run_scripts/ffn_q2a/exffn_gelu_connector_norm_gelu_linear.sh
-bash run_scripts/ffn_q2a/exffn_gelu_connector_gelu_all.sh

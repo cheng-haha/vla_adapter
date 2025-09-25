@@ -1,3 +1,0 @@
-bash run_scripts/ffn_q2a/libero_moe/run_moe_4expert_1shared_2.5inner.sh
-bash run_scripts/ffn_q2a/libero_moe/run_moe_4expert_1shared_3inner.sh
-bash run_scripts/ffn_q2a/libero_moe/run_moe_4expert_1shared_4inner.sh

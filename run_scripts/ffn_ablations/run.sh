@@ -1,6 +1,0 @@
-bash run_scripts/ffn_ablations/action_projector_ffn0.sh
-bash run_scripts/ffn_ablations/action_projector_ffn2.sh
-bash run_scripts/ffn_ablations/action_projector_ffn4.sh
-bash run_scripts/ffn_ablations/dropout_ffn0.sh
-bash run_scripts/ffn_ablations/dropout_ffn2.sh
-bash run_scripts/ffn_ablations/dropout_ffn4.sh
