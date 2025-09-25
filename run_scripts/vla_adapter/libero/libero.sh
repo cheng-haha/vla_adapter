@@ -53,7 +53,10 @@ run_id_note="vla--$current_time"
 MODE="img${num_images_in_input}_mini${use_minivlm}_prop${use_proprio}_pro${use_pro_version}_film${use_film}"
 
 # Build run_root_dir using MODE
-run_root_dir="outputs/${dataset_name}/${MODE}/${current_time}"
+run_root_dir="outputs/${data_name}/${MODE}/${current_time}"
+
+
+mkdir -p logs
 
 #========== Training Execution ==========#
 CUDA_VISIBLE_DEVICES=0,1,2,3 torchrun --standalone --nnodes 1 --nproc-per-node 4 vla-scripts/finetune.py \
@@ -81,8 +84,7 @@ CUDA_VISIBLE_DEVICES=0,1,2,3 torchrun --standalone --nnodes 1 --nproc-per-node 4
   --use_pro_version $use_pro_version \
   --wandb_entity "$wandb_entity" \
   --wandb_project "$wandb_project" \
-  --run_id_note $run_id_note \
-  > logs/$run_id_note.log 2>&1 &
+  --run_id_note $run_id_note 
 
 echo "Training started with run ID: $run_id_note"
 echo "Output directory: $run_root_dir"

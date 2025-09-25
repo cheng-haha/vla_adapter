@@ -12,6 +12,7 @@ IGNORE_INDEX = -100
 ACTION_TOKEN_BEGIN_IDX = 31743
 STOP_INDEX = 2  # '</s>'
 GLOBAL_SEED = 42
+NUM_TOKENS = 64
 
 # Defines supported normalization schemes for action and proprioceptive state.
 class NormalizationType(str, Enum):

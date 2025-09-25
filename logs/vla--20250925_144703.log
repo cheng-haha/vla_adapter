@@ -1,0 +1,210 @@
+[2025-09-25 14:47:49,984] torch.distributed.run: [WARNING] 
+[2025-09-25 14:47:49,984] torch.distributed.run: [WARNING] *****************************************
+[2025-09-25 14:47:49,984] torch.distributed.run: [WARNING] Setting OMP_NUM_THREADS environment variable for each process to be 1 in default, to avoid your system being overloaded, please further tune the variable for optimal performance in your application as needed. 
+[2025-09-25 14:47:49,984] torch.distributed.run: [WARNING] *****************************************
+The cache for model files in Transformers v4.22.0 has been updated. Migrating your old cache. This is a one-time only operation. You can interrupt this and resume the migration later on by calling `transformers.utils.move_cache()`.
+The cache for model files in Transformers v4.22.0 has been updated. Migrating your old cache. This is a one-time only operation. You can interrupt this and resume the migration later on by calling `transformers.utils.move_cache()`.
+The cache for model files in Transformers v4.22.0 has been updated. Migrating your old cache. This is a one-time only operation. You can interrupt this and resume the migration later on by calling `transformers.utils.move_cache()`.
+The cache for model files in Transformers v4.22.0 has been updated. Migrating your old cache. This is a one-time only operation. You can interrupt this and resume the migration later on by calling `transformers.utils.move_cache()`.
+0it [00:00, ?it/s]0it [00:00, ?it/s]
+0it [00:00, ?it/s]0it [00:00, ?it/s]
+0it [00:00, ?it/s]0it [00:00, ?it/s]0it [00:00, ?it/s]
+0it [00:00, ?it/s]
+2025-09-25 14:48:16.100683: I tensorflow/core/util/port.cc:113] oneDNN custom operations are on. You may see slightly different numerical results due to floating-point round-off errors from different computation orders. To turn them off, set the environment variable `TF_ENABLE_ONEDNN_OPTS=0`.
+2025-09-25 14:48:16.100709: I tensorflow/core/util/port.cc:113] oneDNN custom operations are on. You may see slightly different numerical results due to floating-point round-off errors from different computation orders. To turn them off, set the environment variable `TF_ENABLE_ONEDNN_OPTS=0`.
+2025-09-25 14:48:16.100710: I tensorflow/core/util/port.cc:113] oneDNN custom operations are on. You may see slightly different numerical results due to floating-point round-off errors from different computation orders. To turn them off, set the environment variable `TF_ENABLE_ONEDNN_OPTS=0`.
+2025-09-25 14:48:16.100719: I tensorflow/core/util/port.cc:113] oneDNN custom operations are on. You may see slightly different numerical results due to floating-point round-off errors from different computation orders. To turn them off, set the environment variable `TF_ENABLE_ONEDNN_OPTS=0`.
+2025-09-25 14:48:18.774949: E external/local_xla/xla/stream_executor/cuda/cuda_dnn.cc:9261] Unable to register cuDNN factory: Attempting to register factory for plugin cuDNN when one has already been registered
+2025-09-25 14:48:18.774976: E external/local_xla/xla/stream_executor/cuda/cuda_dnn.cc:9261] Unable to register cuDNN factory: Attempting to register factory for plugin cuDNN when one has already been registered
+2025-09-25 14:48:18.774977: E external/local_xla/xla/stream_executor/cuda/cuda_dnn.cc:9261] Unable to register cuDNN factory: Attempting to register factory for plugin cuDNN when one has already been registered
+2025-09-25 14:48:18.774988: E external/local_xla/xla/stream_executor/cuda/cuda_dnn.cc:9261] Unable to register cuDNN factory: Attempting to register factory for plugin cuDNN when one has already been registered
+2025-09-25 14:48:18.775049: E external/local_xla/xla/stream_executor/cuda/cuda_fft.cc:607] Unable to register cuFFT factory: Attempting to register factory for plugin cuFFT when one has already been registered
+2025-09-25 14:48:18.775080: E external/local_xla/xla/stream_executor/cuda/cuda_fft.cc:607] Unable to register cuFFT factory: Attempting to register factory for plugin cuFFT when one has already been registered
+2025-09-25 14:48:18.775084: E external/local_xla/xla/stream_executor/cuda/cuda_fft.cc:607] Unable to register cuFFT factory: Attempting to register factory for plugin cuFFT when one has already been registered
+2025-09-25 14:48:18.775086: E external/local_xla/xla/stream_executor/cuda/cuda_fft.cc:607] Unable to register cuFFT factory: Attempting to register factory for plugin cuFFT when one has already been registered
+2025-09-25 14:48:18.843603: E external/local_xla/xla/stream_executor/cuda/cuda_blas.cc:1515] Unable to register cuBLAS factory: Attempting to register factory for plugin cuBLAS when one has already been registered
+2025-09-25 14:48:18.843596: E external/local_xla/xla/stream_executor/cuda/cuda_blas.cc:1515] Unable to register cuBLAS factory: Attempting to register factory for plugin cuBLAS when one has already been registered
+2025-09-25 14:48:18.843622: E external/local_xla/xla/stream_executor/cuda/cuda_blas.cc:1515] Unable to register cuBLAS factory: Attempting to register factory for plugin cuBLAS when one has already been registered
+2025-09-25 14:48:18.843639: E external/local_xla/xla/stream_executor/cuda/cuda_blas.cc:1515] Unable to register cuBLAS factory: Attempting to register factory for plugin cuBLAS when one has already been registered
+2025-09-25 14:48:19.013242: I tensorflow/core/platform/cpu_feature_guard.cc:182] This TensorFlow binary is optimized to use available CPU instructions in performance-critical operations.
+To enable the following instructions: AVX2 AVX512F AVX512_VNNI AVX512_BF16 AVX_VNNI AMX_TILE AMX_INT8 AMX_BF16 FMA, in other operations, rebuild TensorFlow with the appropriate compiler flags.
+2025-09-25 14:48:19.013242: I tensorflow/core/platform/cpu_feature_guard.cc:182] This TensorFlow binary is optimized to use available CPU instructions in performance-critical operations.
+To enable the following instructions: AVX2 AVX512F AVX512_VNNI AVX512_BF16 AVX_VNNI AMX_TILE AMX_INT8 AMX_BF16 FMA, in other operations, rebuild TensorFlow with the appropriate compiler flags.
+2025-09-25 14:48:19.013405: I tensorflow/core/platform/cpu_feature_guard.cc:182] This TensorFlow binary is optimized to use available CPU instructions in performance-critical operations.
+To enable the following instructions: AVX2 AVX512F AVX512_VNNI AVX512_BF16 AVX_VNNI AMX_TILE AMX_INT8 AMX_BF16 FMA, in other operations, rebuild TensorFlow with the appropriate compiler flags.
+2025-09-25 14:48:19.013412: I tensorflow/core/platform/cpu_feature_guard.cc:182] This TensorFlow binary is optimized to use available CPU instructions in performance-critical operations.
+To enable the following instructions: AVX2 AVX512F AVX512_VNNI AVX512_BF16 AVX_VNNI AMX_TILE AMX_INT8 AMX_BF16 FMA, in other operations, rebuild TensorFlow with the appropriate compiler flags.
+2025-09-25 14:48:55.380928: W tensorflow/compiler/tf2tensorrt/utils/py_utils.cc:38] TF-TRT Warning: Could not find TensorRT
+2025-09-25 14:48:55.381653: W tensorflow/compiler/tf2tensorrt/utils/py_utils.cc:38] TF-TRT Warning: Could not find TensorRT
+2025-09-25 14:48:55.382014: W tensorflow/compiler/tf2tensorrt/utils/py_utils.cc:38] TF-TRT Warning: Could not find TensorRT
+2025-09-25 14:48:55.385672: W tensorflow/compiler/tf2tensorrt/utils/py_utils.cc:38] TF-TRT Warning: Could not find TensorRT
+Using LIBERO constants:
+  NUM_ACTIONS_CHUNK = 8
+  ACTION_DIM = 7
+  PROPRIO_DIM = 8
+  ACTION_PROPRIO_NORMALIZATION_TYPE = bounds_q99
+If needed, manually set the correct constants in `prismatic/vla/constants.py`!
+Traceback (most recent call last):
+  File "/inspire/hdd/global_user/chengdongzhou-240108390137/vla_projects/VLA-Adapter/vla-scripts/finetune.py", line 30, in <module>
+    from experiments.robot.openvla_utils import (
+  File "/inspire/hdd/global_user/chengdongzhou-240108390137/vla_projects/VLA-Adapter/experiments/robot/openvla_utils.py", line 24, in <module>
+    from prismatic.extern.hf.configuration_prismatic import OpenVLAConfig
+  File "/inspire/hdd/global_user/chengdongzhou-240108390137/vla_projects/VLA-Adapter/prismatic/__init__.py", line 1, in <module>
+    from .models import available_model_names, available_models, get_model_description, load
+  File "/inspire/hdd/global_user/chengdongzhou-240108390137/vla_projects/VLA-Adapter/prismatic/models/__init__.py", line 1, in <module>
+    from .load import available_model_names, available_models, get_model_description, load, load_vla
+  File "/inspire/hdd/global_user/chengdongzhou-240108390137/vla_projects/VLA-Adapter/prismatic/models/load.py", line 18, in <module>
+    from prismatic.models.vlas import OpenVLA
+  File "/inspire/hdd/global_user/chengdongzhou-240108390137/vla_projects/VLA-Adapter/prismatic/models/vlas/__init__.py", line 1, in <module>
+    from .openvla import OpenVLA
+  File "/inspire/hdd/global_user/chengdongzhou-240108390137/vla_projects/VLA-Adapter/prismatic/models/vlas/openvla.py", line 18, in <module>
+    from prismatic.vla.action_tokenizer import ActionTokenizer
+  File "/inspire/hdd/global_user/chengdongzhou-240108390137/vla_projects/VLA-Adapter/prismatic/vla/__init__.py", line 1, in <module>
+    from .materialize import get_vla_dataset_and_collator
+  File "/inspire/hdd/global_user/chengdongzhou-240108390137/vla_projects/VLA-Adapter/prismatic/vla/materialize.py", line 18, in <module>
+    from prismatic.vla.datasets import EpisodicRLDSDataset, RLDSBatchTransform, RLDSDataset
+  File "/inspire/hdd/global_user/chengdongzhou-240108390137/vla_projects/VLA-Adapter/prismatic/vla/datasets/__init__.py", line 1, in <module>
+    from .datasets import DummyDataset, EpisodicRLDSDataset, RLDSBatchTransform, RLDSDataset
+  File "/inspire/hdd/global_user/chengdongzhou-240108390137/vla_projects/VLA-Adapter/prismatic/vla/datasets/datasets.py", line 23, in <module>
+    from prismatic.vla.constants import ACTION_DIM, ACTION_PROPRIO_NORMALIZATION_TYPE, ACTION_TOKEN_BEGIN_IDX, IGNORE_INDEX, NUM_ACTIONS_CHUNK, PROPRIO_DIM, STOP_INDEX, NUM_TOKENS
+ImportError: cannot import name 'NUM_TOKENS' from 'prismatic.vla.constants' (/inspire/hdd/global_user/chengdongzhou-240108390137/vla_projects/VLA-Adapter/prismatic/vla/constants.py)
+Using LIBERO constants:
+  NUM_ACTIONS_CHUNK = 8
+  ACTION_DIM = 7
+  PROPRIO_DIM = 8
+  ACTION_PROPRIO_NORMALIZATION_TYPE = bounds_q99
+If needed, manually set the correct constants in `prismatic/vla/constants.py`!
+Traceback (most recent call last):
+  File "/inspire/hdd/global_user/chengdongzhou-240108390137/vla_projects/VLA-Adapter/vla-scripts/finetune.py", line 30, in <module>
+    from experiments.robot.openvla_utils import (
+  File "/inspire/hdd/global_user/chengdongzhou-240108390137/vla_projects/VLA-Adapter/experiments/robot/openvla_utils.py", line 24, in <module>
+    from prismatic.extern.hf.configuration_prismatic import OpenVLAConfig
+  File "/inspire/hdd/global_user/chengdongzhou-240108390137/vla_projects/VLA-Adapter/prismatic/__init__.py", line 1, in <module>
+    from .models import available_model_names, available_models, get_model_description, load
+  File "/inspire/hdd/global_user/chengdongzhou-240108390137/vla_projects/VLA-Adapter/prismatic/models/__init__.py", line 1, in <module>
+    from .load import available_model_names, available_models, get_model_description, load, load_vla
+  File "/inspire/hdd/global_user/chengdongzhou-240108390137/vla_projects/VLA-Adapter/prismatic/models/load.py", line 18, in <module>
+    from prismatic.models.vlas import OpenVLA
+  File "/inspire/hdd/global_user/chengdongzhou-240108390137/vla_projects/VLA-Adapter/prismatic/models/vlas/__init__.py", line 1, in <module>
+    from .openvla import OpenVLA
+  File "/inspire/hdd/global_user/chengdongzhou-240108390137/vla_projects/VLA-Adapter/prismatic/models/vlas/openvla.py", line 18, in <module>
+    from prismatic.vla.action_tokenizer import ActionTokenizer
+  File "/inspire/hdd/global_user/chengdongzhou-240108390137/vla_projects/VLA-Adapter/prismatic/vla/__init__.py", line 1, in <module>
+    from .materialize import get_vla_dataset_and_collator
+  File "/inspire/hdd/global_user/chengdongzhou-240108390137/vla_projects/VLA-Adapter/prismatic/vla/materialize.py", line 18, in <module>
+    from prismatic.vla.datasets import EpisodicRLDSDataset, RLDSBatchTransform, RLDSDataset
+  File "/inspire/hdd/global_user/chengdongzhou-240108390137/vla_projects/VLA-Adapter/prismatic/vla/datasets/__init__.py", line 1, in <module>
+    from .datasets import DummyDataset, EpisodicRLDSDataset, RLDSBatchTransform, RLDSDataset
+  File "/inspire/hdd/global_user/chengdongzhou-240108390137/vla_projects/VLA-Adapter/prismatic/vla/datasets/datasets.py", line 23, in <module>
+    from prismatic.vla.constants import ACTION_DIM, ACTION_PROPRIO_NORMALIZATION_TYPE, ACTION_TOKEN_BEGIN_IDX, IGNORE_INDEX, NUM_ACTIONS_CHUNK, PROPRIO_DIM, STOP_INDEX, NUM_TOKENS
+ImportError: cannot import name 'NUM_TOKENS' from 'prismatic.vla.constants' (/inspire/hdd/global_user/chengdongzhou-240108390137/vla_projects/VLA-Adapter/prismatic/vla/constants.py)
+Using LIBERO constants:
+  NUM_ACTIONS_CHUNK = 8
+  ACTION_DIM = 7
+  PROPRIO_DIM = 8
+  ACTION_PROPRIO_NORMALIZATION_TYPE = bounds_q99
+If needed, manually set the correct constants in `prismatic/vla/constants.py`!
+Traceback (most recent call last):
+  File "/inspire/hdd/global_user/chengdongzhou-240108390137/vla_projects/VLA-Adapter/vla-scripts/finetune.py", line 30, in <module>
+    from experiments.robot.openvla_utils import (
+  File "/inspire/hdd/global_user/chengdongzhou-240108390137/vla_projects/VLA-Adapter/experiments/robot/openvla_utils.py", line 24, in <module>
+    from prismatic.extern.hf.configuration_prismatic import OpenVLAConfig
+  File "/inspire/hdd/global_user/chengdongzhou-240108390137/vla_projects/VLA-Adapter/prismatic/__init__.py", line 1, in <module>
+    from .models import available_model_names, available_models, get_model_description, load
+  File "/inspire/hdd/global_user/chengdongzhou-240108390137/vla_projects/VLA-Adapter/prismatic/models/__init__.py", line 1, in <module>
+    from .load import available_model_names, available_models, get_model_description, load, load_vla
+  File "/inspire/hdd/global_user/chengdongzhou-240108390137/vla_projects/VLA-Adapter/prismatic/models/load.py", line 18, in <module>
+    from prismatic.models.vlas import OpenVLA
+  File "/inspire/hdd/global_user/chengdongzhou-240108390137/vla_projects/VLA-Adapter/prismatic/models/vlas/__init__.py", line 1, in <module>
+    from .openvla import OpenVLA
+  File "/inspire/hdd/global_user/chengdongzhou-240108390137/vla_projects/VLA-Adapter/prismatic/models/vlas/openvla.py", line 18, in <module>
+    from prismatic.vla.action_tokenizer import ActionTokenizer
+  File "/inspire/hdd/global_user/chengdongzhou-240108390137/vla_projects/VLA-Adapter/prismatic/vla/__init__.py", line 1, in <module>
+    from .materialize import get_vla_dataset_and_collator
+  File "/inspire/hdd/global_user/chengdongzhou-240108390137/vla_projects/VLA-Adapter/prismatic/vla/materialize.py", line 18, in <module>
+    from prismatic.vla.datasets import EpisodicRLDSDataset, RLDSBatchTransform, RLDSDataset
+  File "/inspire/hdd/global_user/chengdongzhou-240108390137/vla_projects/VLA-Adapter/prismatic/vla/datasets/__init__.py", line 1, in <module>
+    from .datasets import DummyDataset, EpisodicRLDSDataset, RLDSBatchTransform, RLDSDataset
+  File "/inspire/hdd/global_user/chengdongzhou-240108390137/vla_projects/VLA-Adapter/prismatic/vla/datasets/datasets.py", line 23, in <module>
+    from prismatic.vla.constants import ACTION_DIM, ACTION_PROPRIO_NORMALIZATION_TYPE, ACTION_TOKEN_BEGIN_IDX, IGNORE_INDEX, NUM_ACTIONS_CHUNK, PROPRIO_DIM, STOP_INDEX, NUM_TOKENS
+ImportError: cannot import name 'NUM_TOKENS' from 'prismatic.vla.constants' (/inspire/hdd/global_user/chengdongzhou-240108390137/vla_projects/VLA-Adapter/prismatic/vla/constants.py)
+Using LIBERO constants:
+  NUM_ACTIONS_CHUNK = 8
+  ACTION_DIM = 7
+  PROPRIO_DIM = 8
+  ACTION_PROPRIO_NORMALIZATION_TYPE = bounds_q99
+If needed, manually set the correct constants in `prismatic/vla/constants.py`!
+Traceback (most recent call last):
+  File "/inspire/hdd/global_user/chengdongzhou-240108390137/vla_projects/VLA-Adapter/vla-scripts/finetune.py", line 30, in <module>
+    from experiments.robot.openvla_utils import (
+  File "/inspire/hdd/global_user/chengdongzhou-240108390137/vla_projects/VLA-Adapter/experiments/robot/openvla_utils.py", line 24, in <module>
+    from prismatic.extern.hf.configuration_prismatic import OpenVLAConfig
+  File "/inspire/hdd/global_user/chengdongzhou-240108390137/vla_projects/VLA-Adapter/prismatic/__init__.py", line 1, in <module>
+    from .models import available_model_names, available_models, get_model_description, load
+  File "/inspire/hdd/global_user/chengdongzhou-240108390137/vla_projects/VLA-Adapter/prismatic/models/__init__.py", line 1, in <module>
+    from .load import available_model_names, available_models, get_model_description, load, load_vla
+  File "/inspire/hdd/global_user/chengdongzhou-240108390137/vla_projects/VLA-Adapter/prismatic/models/load.py", line 18, in <module>
+    from prismatic.models.vlas import OpenVLA
+  File "/inspire/hdd/global_user/chengdongzhou-240108390137/vla_projects/VLA-Adapter/prismatic/models/vlas/__init__.py", line 1, in <module>
+    from .openvla import OpenVLA
+  File "/inspire/hdd/global_user/chengdongzhou-240108390137/vla_projects/VLA-Adapter/prismatic/models/vlas/openvla.py", line 18, in <module>
+    from prismatic.vla.action_tokenizer import ActionTokenizer
+  File "/inspire/hdd/global_user/chengdongzhou-240108390137/vla_projects/VLA-Adapter/prismatic/vla/__init__.py", line 1, in <module>
+    from .materialize import get_vla_dataset_and_collator
+  File "/inspire/hdd/global_user/chengdongzhou-240108390137/vla_projects/VLA-Adapter/prismatic/vla/materialize.py", line 18, in <module>
+    from prismatic.vla.datasets import EpisodicRLDSDataset, RLDSBatchTransform, RLDSDataset
+  File "/inspire/hdd/global_user/chengdongzhou-240108390137/vla_projects/VLA-Adapter/prismatic/vla/datasets/__init__.py", line 1, in <module>
+    from .datasets import DummyDataset, EpisodicRLDSDataset, RLDSBatchTransform, RLDSDataset
+  File "/inspire/hdd/global_user/chengdongzhou-240108390137/vla_projects/VLA-Adapter/prismatic/vla/datasets/datasets.py", line 23, in <module>
+    from prismatic.vla.constants import ACTION_DIM, ACTION_PROPRIO_NORMALIZATION_TYPE, ACTION_TOKEN_BEGIN_IDX, IGNORE_INDEX, NUM_ACTIONS_CHUNK, PROPRIO_DIM, STOP_INDEX, NUM_TOKENS
+ImportError: cannot import name 'NUM_TOKENS' from 'prismatic.vla.constants' (/inspire/hdd/global_user/chengdongzhou-240108390137/vla_projects/VLA-Adapter/prismatic/vla/constants.py)
+[2025-09-25 14:50:35,493] torch.distributed.elastic.multiprocessing.api: [ERROR] failed (exitcode: 1) local_rank: 0 (pid: 3840341) of binary: /root/anaconda3/envs/vla-adapter/bin/python3.10
+Traceback (most recent call last):
+  File "/root/anaconda3/envs/vla-adapter/bin/torchrun", line 7, in <module>
+    sys.exit(main())
+  File "/root/anaconda3/envs/vla-adapter/lib/python3.10/site-packages/torch/distributed/elastic/multiprocessing/errors/__init__.py", line 347, in wrapper
+    return f(*args, **kwargs)
+  File "/root/anaconda3/envs/vla-adapter/lib/python3.10/site-packages/torch/distributed/run.py", line 812, in main
+    run(args)
+  File "/root/anaconda3/envs/vla-adapter/lib/python3.10/site-packages/torch/distributed/run.py", line 803, in run
+    elastic_launch(
+  File "/root/anaconda3/envs/vla-adapter/lib/python3.10/site-packages/torch/distributed/launcher/api.py", line 135, in __call__
+    return launch_agent(self._config, self._entrypoint, list(args))
+  File "/root/anaconda3/envs/vla-adapter/lib/python3.10/site-packages/torch/distributed/launcher/api.py", line 268, in launch_agent
+    raise ChildFailedError(
+torch.distributed.elastic.multiprocessing.errors.ChildFailedError: 
+============================================================
+vla-scripts/finetune.py FAILED
+------------------------------------------------------------
+Failures:
+[1]:
+  time      : 2025-09-25_14:50:35
+  host      : cdz--3573a7aaf91c-u4b6jrakne
+  rank      : 1 (local_rank: 1)
+  exitcode  : 1 (pid: 3840342)
+  error_file: <N/A>
+  traceback : To enable traceback see: https://pytorch.org/docs/stable/elastic/errors.html
+[2]:
+  time      : 2025-09-25_14:50:35
+  host      : cdz--3573a7aaf91c-u4b6jrakne
+  rank      : 2 (local_rank: 2)
+  exitcode  : 1 (pid: 3840343)
+  error_file: <N/A>
+  traceback : To enable traceback see: https://pytorch.org/docs/stable/elastic/errors.html
+[3]:
+  time      : 2025-09-25_14:50:35
+  host      : cdz--3573a7aaf91c-u4b6jrakne
+  rank      : 3 (local_rank: 3)
+  exitcode  : 1 (pid: 3840344)
+  error_file: <N/A>
+  traceback : To enable traceback see: https://pytorch.org/docs/stable/elastic/errors.html
+------------------------------------------------------------
+Root Cause (first observed failure):
+[0]:
+  time      : 2025-09-25_14:50:35
+  host      : cdz--3573a7aaf91c-u4b6jrakne
+  rank      : 0 (local_rank: 0)
+  exitcode  : 1 (pid: 3840341)
+  error_file: <N/A>
+  traceback : To enable traceback see: https://pytorch.org/docs/stable/elastic/errors.html
+============================================================
