@@ -1,0 +1,2 @@
+bash run_scripts/ffn_q2a/aloha/aloha_robotwin2_ffn_25_base.sh
+bash run_scripts/ffn_q2a/aloha/aloha_robotwin2_ffn_25_residual_registers_predprop.sh

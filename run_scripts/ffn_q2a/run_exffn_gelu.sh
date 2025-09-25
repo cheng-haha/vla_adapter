@@ -1,0 +1,3 @@
+bash run_scripts/ffn_q2a/exffn_swiglu_connector_swiglu.sh
+bash run_scripts/ffn_q2a/exffn_gelu_connector_gelu.sh
+bash run_scripts/ffn_q2a/exffn_gelu_connector_lgl.sh

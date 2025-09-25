@@ -1,0 +1,2 @@
+bash run_scripts/ffn_q2a/exffn_relu_connector_relu.sh
+bash run_scripts/ffn_q2a/exffn_relu_connector_linear_relu.sh

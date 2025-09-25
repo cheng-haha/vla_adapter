@@ -1,0 +1,2 @@
+bash run_scripts/ffn_q2a/condition/exinner2_l2norm_1layer.sh
+bash run_scripts/ffn_q2a/condition/exinner2_l2norm_2layer.sh

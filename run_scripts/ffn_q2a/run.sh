@@ -1,0 +1,3 @@
+# bash run_scripts/ffn_q2a/connector_gelu.sh
+bash run_scripts/ffn_q2a/aloha/robotwin_dual_bottles_pick_hard_d435_20.sh
+bash run_scripts/baseline/robotwin_dual_bottles_pick_hard_d435_20.sh
