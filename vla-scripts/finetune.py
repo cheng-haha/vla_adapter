@@ -749,17 +749,17 @@ def finetune(cfg: FinetuneConfig) -> None:
     # the file to the downloaded or locally stored checkpoint directory so
     # that the user's changes to the VLA class logic go into effect
 
-    if model_is_on_hf_hub(cfg.config_file_path):
-        # Download model directly from Hugging Face Hub
-        vla_download_path = snapshot_download(repo_id=cfg.config_file_path)
-        # Overwrite VLA path
-        cfg.config_file_path = vla_download_path
-    else:
-        # Register OpenVLA model to HF Auto Classes (not needed if the model is on HF Hub)
-        AutoConfig.register("openvla", OpenVLAConfig)
-        AutoImageProcessor.register(OpenVLAConfig, PrismaticImageProcessor)
-        AutoProcessor.register(OpenVLAConfig, PrismaticProcessor)
-        AutoModelForVision2Seq.register(OpenVLAConfig, OpenVLAForActionPrediction)
+    # if model_is_on_hf_hub(cfg.config_file_path):
+    #     # Download model directly from Hugging Face Hub
+    #     vla_download_path = snapshot_download(repo_id=cfg.config_file_path)
+    #     # Overwrite VLA path
+    #     cfg.config_file_path = vla_download_path
+    # else:
+    # Register OpenVLA model to HF Auto Classes (not needed if the model is on HF Hub)
+    AutoConfig.register("openvla", OpenVLAConfig)
+    AutoImageProcessor.register(OpenVLAConfig, PrismaticImageProcessor)
+    AutoProcessor.register(OpenVLAConfig, PrismaticProcessor)
+    AutoModelForVision2Seq.register(OpenVLAConfig, OpenVLAForActionPrediction)
 
 
     # Update config.json and sync model files
@@ -992,7 +992,7 @@ def finetune(cfg: FinetuneConfig) -> None:
         collate_fn=collator,
         num_workers=0,  # Important: Set to 0 if using RLDS, which uses its own parallelism
     )
-    print('Len of dataloader: ', len(dataloader))
+    # print('Len of dataloader: ', len(dataloader))
     if cfg.use_val_set:
         val_batch_size = cfg.batch_size
         val_dataloader = DataLoader(

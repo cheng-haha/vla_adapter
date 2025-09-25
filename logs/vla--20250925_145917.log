@@ -97,3 +97,30 @@ Detected constants:
 	ACTION_DIM: 7
 	PROPRIO_DIM: 8
 	ACTION_PROPRIO_NORMALIZATION_TYPE: bounds_q99
+[2025-09-25 15:05:36,935] torch.distributed.elastic.agent.server.api: [WARNING] Received Signals.SIGTERM death signal, shutting down workers
+[2025-09-25 15:05:36,956] torch.distributed.elastic.multiprocessing.api: [WARNING] Sending process 3895387 closing signal SIGTERM
+[2025-09-25 15:05:36,956] torch.distributed.elastic.multiprocessing.api: [WARNING] Sending process 3895388 closing signal SIGTERM
+[2025-09-25 15:05:36,956] torch.distributed.elastic.multiprocessing.api: [WARNING] Sending process 3895389 closing signal SIGTERM
+[2025-09-25 15:05:36,956] torch.distributed.elastic.multiprocessing.api: [WARNING] Sending process 3895390 closing signal SIGTERM
+Traceback (most recent call last):
+  File "/root/anaconda3/envs/vla-adapter/bin/torchrun", line 7, in <module>
+    sys.exit(main())
+  File "/root/anaconda3/envs/vla-adapter/lib/python3.10/site-packages/torch/distributed/elastic/multiprocessing/errors/__init__.py", line 347, in wrapper
+    return f(*args, **kwargs)
+  File "/root/anaconda3/envs/vla-adapter/lib/python3.10/site-packages/torch/distributed/run.py", line 812, in main
+    run(args)
+  File "/root/anaconda3/envs/vla-adapter/lib/python3.10/site-packages/torch/distributed/run.py", line 803, in run
+    elastic_launch(
+  File "/root/anaconda3/envs/vla-adapter/lib/python3.10/site-packages/torch/distributed/launcher/api.py", line 135, in __call__
+    return launch_agent(self._config, self._entrypoint, list(args))
+  File "/root/anaconda3/envs/vla-adapter/lib/python3.10/site-packages/torch/distributed/launcher/api.py", line 259, in launch_agent
+    result = agent.run()
+  File "/root/anaconda3/envs/vla-adapter/lib/python3.10/site-packages/torch/distributed/elastic/metrics/api.py", line 123, in wrapper
+    result = f(*args, **kwargs)
+  File "/root/anaconda3/envs/vla-adapter/lib/python3.10/site-packages/torch/distributed/elastic/agent/server/api.py", line 727, in run
+    result = self._invoke_run(role)
+  File "/root/anaconda3/envs/vla-adapter/lib/python3.10/site-packages/torch/distributed/elastic/agent/server/api.py", line 868, in _invoke_run
+    time.sleep(monitor_interval)
+  File "/root/anaconda3/envs/vla-adapter/lib/python3.10/site-packages/torch/distributed/elastic/multiprocessing/api.py", line 62, in _terminate_process_handler
+    raise SignalException(f"Process {os.getpid()} got signal: {sigval}", sigval=sigval)
+torch.distributed.elastic.multiprocessing.api.SignalException: Process 3895256 got signal: 15

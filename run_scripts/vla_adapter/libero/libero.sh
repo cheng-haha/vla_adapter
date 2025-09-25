@@ -16,7 +16,7 @@ export PYTHONPATH=$ROOT_PATH/vla_projects/$PROJECT_PATH
 # Dataset and paths
 data_name=libero_4_task_suites_no_noops
 data_root_dir=data/libero
-vlm_path=$ROOT_PATH/ai_models/pretrained_models/prism-qwen25-extra-dinosiglip-224px-0_5b
+vlm_path=$ROOT_PATH/ai_models/Stanford-ILIAD/prism-qwen25-extra-dinosiglip-224px-0_5b
 config_file_path=pretrained_models/configs
 
 # Training parameters
@@ -59,7 +59,7 @@ run_root_dir="outputs/${data_name}/${MODE}/${current_time}"
 mkdir -p logs
 
 #========== Training Execution ==========#
-CUDA_VISIBLE_DEVICES=0,1,2,3 torchrun --standalone --nnodes 1 --nproc-per-node 4 vla-scripts/finetune.py \
+python -m debugpy --listen 1234 --wait-for-client '/root/anaconda3/envs/vla-adapter/bin/torchrun' --standalone --nnodes 1 --nproc-per-node 4 vla-scripts/finetune.py \
   --vlm_path $vlm_path \
   --config_file_path $config_file_path \
   --data_root_dir $data_root_dir \
