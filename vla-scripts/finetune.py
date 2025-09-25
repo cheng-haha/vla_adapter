@@ -68,6 +68,7 @@ class FinetuneConfig:
     # fmt: off
     config_file_path: str = "openvla/openvla-7b"     # Path to necessary config files of LA-Adapter
     vlm_path: str = "openvla/openvla-7b"             # Path to OpenVLA model (on HuggingFace Hub or stored locally)
+    llm_local_path: Optional[str] = None             # Path to OpenVLA model (on HuggingFace Hub or stored locally)
     use_minivlm: bool = False                        # 
     resum_vla_path: str = "openvla/openvla-7b"       # Path to OpenVLA model (on HuggingFace Hub or stored locally)
 
@@ -778,12 +779,13 @@ def finetune(cfg: FinetuneConfig) -> None:
         hf_token = ''
         if 'prism-qwen25-extra-dinosiglip-224px-0_5b' in cfg.vlm_path:
             
-            vlm = load(cfg.vlm_path, hf_token=hf_token, load_for_training=True)
+            vlm = load(cfg.vlm_path, hf_token=hf_token, load_for_training=True, llm_local_path=cfg.llm_local_path)
         else:
             vlm = load_vla(
                 cfg.vlm_path,
                 hf_token=hf_token,
                 load_for_training=True,
+                llm_local_path=cfg.llm_local_path,
                 )
         config = AutoConfig.from_pretrained("pretrained_models/configs/config.json")
         vla = AutoModelForVision2Seq.from_config(config, torch_dtype=torch.bfloat16).to(device_id)  # Create a new model with configuration, the parameters are randomly initialized
