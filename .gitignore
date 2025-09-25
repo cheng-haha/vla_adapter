@@ -151,4 +151,10 @@ data/
 # Rollout videos and wandb logs
 rollouts/
 wandb/
-outputs/
+results/
+experiments/logs/
+inference_scripts/
+logging/
+Metaworld/
+HRM/
+nora/
