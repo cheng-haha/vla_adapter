@@ -7,6 +7,10 @@ Vision backbone that returns concatenated features from both DINOv2 and SigLIP.
 from dataclasses import dataclass
 from functools import partial
 from typing import Callable, Dict, Tuple
+import os
+import glob
+from pathlib import Path
+from huggingface_hub import constants
 
 import timm
 import torch
@@ -46,6 +50,29 @@ class DinoSigLIPImageTransform:
         return {"dino": self.dino_image_transform(img, **kwargs), "siglip": self.siglip_image_transform(img, **kwargs)}
 
 
+def find_hf_checkpoint(model_dir: Path) -> Path:
+    """Find the model checkpoint file within a Hugging Face Hub cache directory."""
+    # Check for model file in the main directory
+    for pattern in ["*.safetensors", "*.bin"]:
+        if files := list(model_dir.glob(pattern)):
+            return files[0]
+
+    # If not found, check inside the 'snapshots' subdirectory
+    snapshots_dir = model_dir / "snapshots"
+    if snapshots_dir.is_dir():
+        snapshot_dirs = [d for d in snapshots_dir.iterdir() if d.is_dir()]
+        if not snapshot_dirs:
+            raise FileNotFoundError(f"No snapshot directories found in {snapshots_dir}")
+
+        # Use the most recently modified snapshot directory
+        latest_snapshot = max(snapshot_dirs, key=lambda d: d.stat().st_mtime)
+        for pattern in ["*.safetensors", "*.bin"]:
+            if files := list(latest_snapshot.glob(pattern)):
+                return files[0]
+
+    raise FileNotFoundError(f"No model checkpoint file found in {model_dir} or its snapshots.")
+
+
 class DinoSigLIPViTBackbone(VisionBackbone):
     def __init__(
         self,
@@ -53,6 +80,7 @@ class DinoSigLIPViTBackbone(VisionBackbone):
         image_resize_strategy: str,
         default_image_size: int = 224,
         image_sequence_len: int = 1,
+        vision_models_path: str = None,
     ) -> None:
         super().__init__(
             vision_backbone_id,
@@ -60,18 +88,36 @@ class DinoSigLIPViTBackbone(VisionBackbone):
             default_image_size=default_image_size,
             image_sequence_len=image_sequence_len,
         )
-        self.dino_timm_path_or_url = DINOSigLIP_VISION_BACKBONES[vision_backbone_id]["dino"]
-        self.siglip_timm_path_or_url = DINOSigLIP_VISION_BACKBONES[vision_backbone_id]["siglip"]
+        dino_model_name = DINOSigLIP_VISION_BACKBONES[vision_backbone_id]["dino"]
+        siglip_model_name = DINOSigLIP_VISION_BACKBONES[vision_backbone_id]["siglip"]
 
-        # Initialize both Featurizers (ViTs) by downloading from HF / TIMM Hub if necessary
-        self.dino_featurizer: VisionTransformer = timm.create_model(
-            self.dino_timm_path_or_url, pretrained=True, num_classes=0, img_size=self.default_image_size
-        )
+        # Create model keyword arguments
+        dino_kwargs = {"pretrained": True, "num_classes": 0, "img_size": self.default_image_size}
+        siglip_kwargs = {"pretrained": True, "num_classes": 0, "img_size": self.default_image_size}
+
+        # If a local path is provided, update kwargs to load from local checkpoints.
+        # This allows for offline loading of models from a huggingface-hub cache.
+        if vision_models_path:
+            if siglip_model_name == 'vit_so400m_patch14_siglip_224':
+                siglip_model_local_path = 'ViT-SO400M-14-SigLIP'
+            else:
+                siglip_model_local_path = siglip_model_name
+            # Construct paths assuming huggingface-hub cache structure.
+            # e.g. models--timm--vit_large_patch14_reg4_dinov2.lvd142m
+            dino_dir = Path(vision_models_path) / f"models--timm--{dino_model_name}"
+            siglip_dir = Path(vision_models_path) / f"models--timm--{siglip_model_local_path}"
+
+            dino_checkpoint = find_hf_checkpoint(dino_dir)
+            siglip_checkpoint = find_hf_checkpoint(siglip_dir)
+
+            dino_kwargs["checkpoint_path"] = str(dino_checkpoint)
+            siglip_kwargs["checkpoint_path"] = str(siglip_checkpoint)
+
+        # Initialize both Featurizers (ViTs) by downloading from HF / TIMM Hub or loading from local path
+        self.dino_featurizer: VisionTransformer = timm.create_model(dino_model_name, **dino_kwargs)
         self.dino_featurizer.eval()
 
-        self.siglip_featurizer: VisionTransformer = timm.create_model(
-            self.siglip_timm_path_or_url, pretrained=True, num_classes=0, img_size=self.default_image_size
-        )
+        self.siglip_featurizer: VisionTransformer = timm.create_model(siglip_model_name, **siglip_kwargs)
         self.siglip_featurizer.eval()
 
         # Monkey-Patch the `forward()` function of the featurizers to ensure FSDP-compatibility
