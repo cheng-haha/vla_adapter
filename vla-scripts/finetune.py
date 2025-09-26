@@ -275,7 +275,7 @@ def init_module(
     if cfg.resume:
         state_dict = load_checkpoint(module_name, cfg.resum_vla_path, cfg.resume_step)
         module.load_state_dict(state_dict)
-        print('loaded!!!!!!!!!')
+        print("Loaded checkpoint successfully.")
 
     if to_bf16:
         module = module.to(torch.bfloat16)
@@ -432,8 +432,8 @@ def run_forward_pass(
             predicted_next_actions = predicted_actions[:, 1:]
             curr_action_l1_loss = torch.nn.L1Loss()(ground_truth_curr_action, predicted_curr_action)
             next_actions_l1_loss = torch.nn.L1Loss()(ground_truth_next_actions, predicted_next_actions)
-            if compute_diffusion_l1:
-                print('curr: ',curr_action_l1_loss.item())
+            # if compute_diffusion_l1:
+            print(f"Losses - Current Action: {curr_action_l1_loss.item():.6f}, Next Actions: {next_actions_l1_loss.item():.6f}")
                 # print('next: ',next_actions_l1_loss.item())
 
             metrics.update(
@@ -841,7 +841,7 @@ def finetune(cfg: FinetuneConfig) -> None:
         for name, param in vla.named_parameters():
             if "action_queries" in name:
                 param.requires_grad = True
-        vla.print_trainable_parameters()
+        # vla.print_trainable_parameters()
 
     else:
         for name, param in vla.named_parameters():
