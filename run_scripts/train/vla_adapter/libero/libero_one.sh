@@ -15,12 +15,12 @@ export PYTHONPATH=$ROOT_PATH/vla_projects/$PROJECT_PATH
 #========== Training Configuration ==========#
 # Dataset and paths
 data_name=libero_4_task_suites_no_noops
-data_root_dir=data/libero
+data_root_dir=$ROOT_PATH/datasets/openvla/modified_libero_rlds
 vlm_path=$ROOT_PATH/ai_models/Stanford-ILIAD/prism-qwen25-extra-dinosiglip-224px-0_5b
 config_file_path=pretrained_models/configs
 
 # Training parameters
-batch_size=16
+batch_size=8
 grad_accumulation_steps=1
 learning_rate=2e-4
 max_steps=150005
@@ -59,7 +59,7 @@ run_root_dir="outputs/${data_name}/${MODE}/${current_time}"
 mkdir -p logs
 
 #========== Training Execution ==========#
-python -m debugpy --listen 1234 --wait-for-client '/root/anaconda3/envs/vla-adapter/bin/torchrun' --standalone --nnodes 1 --nproc-per-node 4 vla-scripts/finetune.py \
+python -m debugpy --listen 1234 --wait-for-client '/root/anaconda3/envs/vla-adapter/bin/torchrun' --standalone --nnodes 1 --nproc-per-node 1 vla-scripts/finetune.py \
   --vlm_path $vlm_path \
   --config_file_path $config_file_path \
   --data_root_dir $data_root_dir \

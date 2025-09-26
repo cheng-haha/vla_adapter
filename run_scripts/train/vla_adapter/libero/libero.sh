@@ -20,9 +20,9 @@ vlm_path=$ROOT_PATH/ai_models/Stanford-ILIAD/prism-qwen25-extra-dinosiglip-224px
 config_file_path=pretrained_models/configs
 
 # Training parameters
-batch_size=4
+batch_size=16
 grad_accumulation_steps=1
-learning_rate=2e-4
+learning_rate=5e-4
 max_steps=150005
 num_steps_before_decay=150000
 save_freq=5000
@@ -53,13 +53,13 @@ run_id_note="vla--$current_time"
 MODE="img${num_images_in_input}_mini${use_minivlm}_prop${use_proprio}_pro${use_pro_version}_film${use_film}"
 
 # Build run_root_dir using MODE
-run_root_dir="outputs/${data_name}/${MODE}/${current_time}"
+run_root_dir="outputs/${data_name}/${MODE}"
 
 
 mkdir -p logs
 
 #========== Training Execution ==========#
-python -m debugpy --listen 1234 --wait-for-client '/root/anaconda3/envs/vla-adapter/bin/torchrun' --standalone --nnodes 1 --nproc-per-node 1 vla-scripts/finetune.py \
+torchrun --standalone --nnodes 1 --nproc-per-node 4 vla-scripts/finetune.py \
   --vlm_path $vlm_path \
   --config_file_path $config_file_path \
   --data_root_dir $data_root_dir \

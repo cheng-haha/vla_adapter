@@ -57,19 +57,6 @@ def find_hf_checkpoint(model_dir: Path) -> Path:
         if files := list(model_dir.glob(pattern)):
             return files[0]
 
-    # If not found, check inside the 'snapshots' subdirectory
-    snapshots_dir = model_dir / "snapshots"
-    if snapshots_dir.is_dir():
-        snapshot_dirs = [d for d in snapshots_dir.iterdir() if d.is_dir()]
-        if not snapshot_dirs:
-            raise FileNotFoundError(f"No snapshot directories found in {snapshots_dir}")
-
-        # Use the most recently modified snapshot directory
-        latest_snapshot = max(snapshot_dirs, key=lambda d: d.stat().st_mtime)
-        for pattern in [ "*.bin"]:
-            if files := list(latest_snapshot.glob(pattern)):
-                return files[0]
-
     raise FileNotFoundError(f"No model checkpoint file found in {model_dir} or its snapshots.")
 
 
@@ -92,8 +79,8 @@ class DinoSigLIPViTBackbone(VisionBackbone):
         siglip_model_name = DINOSigLIP_VISION_BACKBONES[vision_backbone_id]["siglip"]
 
         # Create model keyword arguments
-        dino_kwargs = {"pretrained": True, "num_classes": 0, "img_size": self.default_image_size}
-        siglip_kwargs = {"pretrained": True, "num_classes": 0, "img_size": self.default_image_size}
+        dino_kwargs = {"pretrained": False, "num_classes": 0, "img_size": self.default_image_size}
+        siglip_kwargs = {"pretrained": False, "num_classes": 0, "img_size": self.default_image_size}
 
         # If a local path is provided, update kwargs to load from local checkpoints.
         # This allows for offline loading of models from a huggingface-hub cache.
