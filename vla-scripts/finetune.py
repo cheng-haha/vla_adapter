@@ -1061,6 +1061,8 @@ def finetune(cfg: FinetuneConfig) -> None:
             if cfg.lr_warmup_steps > 0:
                 lr_progress = min((gradient_step_idx + 1) / cfg.lr_warmup_steps, 1.0)  # Cap at 1.0
                 current_lr = original_lr * (0.1 + 0.9 * lr_progress)
+                if distributed_state.is_main_process and log_step % cfg.wandb_log_freq == 0:
+                    print(f"Step {log_step} - Learning Rate: {current_lr:.6e}")
                 for param_group in optimizer.param_groups:
                     param_group["lr"] = current_lr
 
