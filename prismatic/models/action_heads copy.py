@@ -11,95 +11,125 @@ from prismatic.vla.constants import ACTION_DIM, ACTION_TOKEN_BEGIN_IDX, IGNORE_I
 
 
 
-class ActionTokenPooling(nn.Module):
-    """
-    A module for pooling action tokens.
-    It aggregates a sequence of tokens (B, NUM_TOKENS, D) into a smaller
-    sequence of action chunks (B, NUM_ACTIONS_CHUNK, D) using various pooling strategies.
-    """
-    def __init__(self, pooling_type: str, input_dim: int, num_tokens: int = NUM_TOKENS, num_chunks: int = NUM_ACTIONS_CHUNK):
-        super().__init__()
-        self.pooling_type = pooling_type
-        self.num_tokens = num_tokens
-        self.num_chunks = num_chunks
-        self.input_dim = input_dim
-
-        if pooling_type == "attention":
-            self.attention = nn.Sequential(
-                nn.Linear(input_dim, 128),
-                nn.ReLU(),
-                nn.Linear(128, 1),
-            )
-        elif pooling_type == "weighted":
-            # Implements an uneven pooling scheme where the first action chunk gets more tokens.
-            # For example, with 64 tokens and 8 chunks, the first chunk might be pooled from 32 tokens,
-            # and the rest from the remaining 32 tokens evenly. This prioritizes the first action.
-            if self.num_chunks > 1:
-                first_chunk_size = self.num_tokens // 2
-                remaining_tokens = self.num_tokens - first_chunk_size
-                base_size = remaining_tokens // (self.num_chunks - 1)
-                rem = remaining_tokens % (self.num_chunks - 1)
-                
-                self.chunk_sizes = [first_chunk_size] + [base_size] * (self.num_chunks - 1)
-                for i in range(rem):
-                    self.chunk_sizes[i + 1] += 1
-            else:
-                self.chunk_sizes = [self.num_tokens]
-            
-            assert sum(self.chunk_sizes) == self.num_tokens, "Sum of chunk sizes must equal total number of tokens."
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """
-        Args:
-            x (torch.Tensor): Input tensor of shape (B, NUM_TOKENS, D).
-
-        Returns:
-            torch.Tensor: Pooled tensor of shape (B, NUM_ACTIONS_CHUNK, D).
-        """
-        B, _, D = x.shape
-
-        if self.pooling_type in ["mean", "max"]:
-            if self.num_tokens % self.num_chunks != 0:
-                raise ValueError("For mean/max pooling, num_tokens must be divisible by num_chunks.")
-            tokens_per_chunk = self.num_tokens // self.num_chunks
-            
-            x = x.view(B, self.num_chunks, tokens_per_chunk, D)
-            if self.pooling_type == "mean":
-                pooled = x.mean(dim=2)
-            else: # max
-                pooled, _ = x.max(dim=2)
-            return pooled
-
-        elif self.pooling_type == "attention":
-            if self.num_tokens % self.num_chunks != 0:
-                raise ValueError("For attention pooling, num_tokens must be divisible by num_chunks.")
-            tokens_per_chunk = self.num_tokens // self.num_chunks
-            x_reshaped = x.view(B * self.num_chunks, tokens_per_chunk, D)
-
-            attn_weights = torch.softmax(self.attention(x_reshaped), dim=1)
-            pooled = torch.sum(x_reshaped * attn_weights, dim=1)
-            
-            return pooled.view(B, self.num_chunks, D)
-
-        elif self.pooling_type == "weighted":
-            outputs = []
-            start_idx = 0
-            for chunk_size in self.chunk_sizes:
-                end_idx = start_idx + chunk_size
-                chunk = x[:, start_idx:end_idx, :]
-                outputs.append(chunk.mean(dim=1, keepdim=True))
-                start_idx = end_idx
-            return torch.cat(outputs, dim=1)
-
-        else:
-            raise ValueError(f"Unknown pooling type: {self.pooling_type}")
-
-
 def learnable_random_perturbations(seq_len, dim, device, dtype):
     random_perturbations = nn.Parameter(torch.zeros(seq_len, dim, device=device, dtype=dtype))
     nn.init.normal_(random_perturbations, mean=0.0, std=0.02)
     return random_perturbations
 
+
+
+class ActionTokenPooler(nn.Module):
+    """Pools token features along the action-token dimension to a fixed number of chunks.
+
+    Supported strategies:
+    - mean: Uniform grouping followed by mean within each group
+    - progressive: Custom group sizes (e.g., "16,8,4,4,4,4"); mean within each group
+    - attention: Learnable queries attending over all tokens to produce K pooled vectors
+    """
+    def __init__(self, hidden_dim: int, pooling_type: str = "mean", pooling_schedule = None):
+        super().__init__()
+        self.hidden_dim = hidden_dim
+        self.pooling_type = pooling_type
+        self.pool_sizes = None
+
+        if pooling_type == "attention":
+            # Learnable queries for NUM_ACTIONS_CHUNK outputs
+            self.pool_queries = nn.Parameter(torch.randn(NUM_ACTIONS_CHUNK, hidden_dim) * 0.02)
+        elif pooling_type == "progressive":
+            self.pool_sizes = self._parse_schedule(pooling_schedule)
+
+    def _parse_schedule(self, schedule):
+        """Parses a schedule into a list of group sizes with sum(NUM_TOKENS)."""
+        if schedule is None:
+            # Fallback to uniform if not provided
+            return self._uniform_groups(NUM_TOKENS, NUM_ACTIONS_CHUNK)
+        if isinstance(schedule, str):
+            try:
+                sizes = [int(x.strip()) for x in schedule.split(",") if len(x.strip()) > 0]
+            except Exception:
+                sizes = []
+        elif isinstance(schedule, (list, tuple)):
+            sizes = [int(x) for x in schedule]
+        else:
+            sizes = []
+
+        if len(sizes) != NUM_ACTIONS_CHUNK or sum(sizes) != NUM_TOKENS or any(s <= 0 for s in sizes):
+            # Invalid schedule → uniform fallback
+            return self._uniform_groups(NUM_TOKENS, NUM_ACTIONS_CHUNK)
+        return sizes
+
+    def _uniform_groups(self, total_tokens: int, num_groups: int):
+        base = total_tokens // num_groups
+        rem = total_tokens % num_groups
+        sizes = [base + (1 if i < rem else 0) for i in range(num_groups)]
+        return sizes
+
+    def _group_ranges(self, sizes):
+        ranges = []
+        start = 0
+        for size in sizes:
+            end = start + size
+            ranges.append((start, end))
+            start = end
+        return ranges
+
+    def _mean_pool(self, x):
+        # x: (B*, T, D) → (B*, K, D) by uniform grouping
+        sizes = self._uniform_groups(NUM_TOKENS, NUM_ACTIONS_CHUNK)
+        ranges = self._group_ranges(sizes)
+        pooled = []
+        for (s, e) in ranges:
+            pooled.append(x[:, s:e, :].mean(dim=1))
+        return torch.stack(pooled, dim=1)
+
+    def _progressive_pool(self, x):
+        # x: (B*, T, D) → (B*, K, D) by provided schedule grouping
+        sizes = self.pool_sizes
+        ranges = self._group_ranges(sizes)
+        pooled = []
+        for (s, e) in ranges:
+            pooled.append(x[:, s:e, :].mean(dim=1))
+        return torch.stack(pooled, dim=1)
+
+    def _attention_pool(self, x):
+        # x: (B*, T, D), queries: (K, D) → attn over T → (B*, K, D)
+        # Normalize queries for stable training
+        q = self.pool_queries  # (K, D)
+        q = nn.functional.normalize(q, dim=-1)
+        x_norm = nn.functional.normalize(x, dim=-1)
+        attn_logits = torch.einsum("btd,kd->bkt", x_norm, q)  # (B*, K, T)
+        attn = torch.softmax(attn_logits, dim=-1)
+        pooled = torch.einsum("bkt,btd->bkd", attn, x)  # (B*, K, D)
+        return pooled
+
+    def forward(self, actions_hidden_states: torch.Tensor) -> torch.Tensor:
+        """Pools along the token axis.
+
+        Args:
+            actions_hidden_states: Tensor of shape (B, L, T, D) or (B*, T, D)
+
+        Returns:
+            Tensor of shape (B, L, K, D) matching input batch/layer dims.
+        """
+        if actions_hidden_states.dim() == 4:
+            B, L, T, D = actions_hidden_states.shape
+            x = actions_hidden_states.reshape(B * L, T, D)
+            pooled = self._pool(x)
+            return pooled.reshape(B, L, NUM_ACTIONS_CHUNK, D)
+        elif actions_hidden_states.dim() == 3:
+            return self._pool(actions_hidden_states)
+        else:
+            raise ValueError("actions_hidden_states must be 3D or 4D tensor")
+
+    def _pool(self, x):
+        if self.pooling_type == "mean":
+            return self._mean_pool(x)
+        if self.pooling_type == "progressive":
+            return self._progressive_pool(x)
+        if self.pooling_type == "attention":
+            return self._attention_pool(x)
+        # Fallback to mean
+        return self._mean_pool(x)
 
 
 class L1RegressionActionHead(nn.Module):
@@ -112,22 +142,17 @@ class L1RegressionActionHead(nn.Module):
         num_task_tokens=512,
         use_pro_version=False,
         action_probing=False,
-        action_pooling_type="mean",
+        pooling_type: str = "mean",
+        pooling_schedule = None,
     ):
         super().__init__()
         self.num_task_tokens = num_task_tokens
         self.action_dim = action_dim
         self.hidden_dim = hidden_dim
         self.action_probing = action_probing
-        self.action_pooling_type = action_pooling_type
+        self.pooler = ActionTokenPooler(hidden_dim=self.hidden_dim, pooling_type=pooling_type, pooling_schedule=pooling_schedule)
 
         if self.action_probing:
-            self.token_pooler = ActionTokenPooling(
-                pooling_type=self.action_pooling_type,
-                input_dim=hidden_dim,
-                num_tokens=NUM_TOKENS,
-                num_chunks=NUM_ACTIONS_CHUNK
-            )
             # Lightweight head for generating a coarse action prediction.
             # It takes the flattened hidden states of the action tokens from the last layer of the LLM.
             self.coarse_action_head = nn.Sequential(
@@ -163,15 +188,15 @@ class L1RegressionActionHead(nn.Module):
         task_hidden_states = actions_hidden_states[:, :, : self.num_task_tokens, :]
         actions_hidden_states = actions_hidden_states[:, :, self.num_task_tokens :, :]
 
+        # Pool action tokens from T → K tokens per layer
+        actions_hidden_states = self.pooler(actions_hidden_states)
+
         if self.action_probing:
             # Use the last layer's action hidden states
-            last_layer_actions_hidden = actions_hidden_states[:, -1, :, :]  # (B, NUM_TOKENS, D)
-
-            # Pool action tokens into action chunks
-            pooled_actions_hidden = self.token_pooler(last_layer_actions_hidden) # (B, NUM_ACTIONS_CHUNK, D)
+            last_layer_actions_hidden = actions_hidden_states[:, -1, :, :]  # (B, NUM_ACTIONS_CHUNK, D)
 
             # Get coarse action prediction
-            coarse_action = self.coarse_action_head(pooled_actions_hidden)  # (B, NUM_ACTIONS_CHUNK, ACTION_DIM)
+            coarse_action = self.coarse_action_head(last_layer_actions_hidden)  # (B, NUM_ACTIONS_CHUNK, ACTION_DIM)
 
             # Reshape coarse action to condition the main model
             rearranged_actions_hidden_states = coarse_action.reshape(

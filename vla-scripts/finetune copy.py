@@ -86,6 +86,10 @@ class FinetuneConfig:
     use_proprio: bool = False                        # If True, includes robot proprioceptive state in input
     phase1_path: str = "None"
 
+    # Action token pooling
+    pooling_type: str = "mean"                       # Pooling strategy for action tokens: mean|progressive|attention
+    pooling_schedule: Optional[str] = None           # Optional schedule for progressive pooling, e.g., "16,8,4,4,4,4"
+
     # Training configuration
     batch_size: int = 8                              # Batch size per device (total batch size = batch_size * num GPUs)
     learning_rate: float = 5e-4                      # Learning rate
@@ -128,7 +132,6 @@ class FinetuneConfig:
     # fmt: on
     add_sink_token: bool = False
     action_probing: bool = False
-    action_pooling_type: str = "attention"           # Pooling type for action tokens, options: "mean", "max", "attention", "weighted"
     merge_fine_tuning: bool = False
 
 
@@ -896,7 +899,8 @@ def finetune(cfg: FinetuneConfig) -> None:
             "action_dim": ACTION_DIM,
             "use_pro_version": cfg.use_pro_version,
             "action_probing": cfg.action_probing,
-            "action_pooling_type": cfg.action_pooling_type,
+            "pooling_type": cfg.pooling_type,
+            "pooling_schedule": cfg.pooling_schedule,
             },
         to_bf16=True,
         )
