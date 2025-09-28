@@ -179,6 +179,7 @@ def get_run_id(cfg) -> str:
             f"{cfg.config_file_path.split('/')[-1]}+{cfg.dataset_name}"
             f"+b{cfg.batch_size * cfg.grad_accumulation_steps}"
             f"+lr-{cfg.learning_rate}"
+            f"+MS-{cfg.max_steps}-DS-{cfg.num_steps_before_decay}"
         )
         if cfg.use_fz:
             run_id += f"+frozen+dropout-{cfg.lora_dropout}"
