@@ -60,7 +60,7 @@ run_root_dir="outputs/${data_name}/${MODE}"
 mkdir -p logs
 
 #========== Training Execution ==========#
-torchrun --standalone --nnodes 1 --nproc-per-node 4 vla-scripts/finetune.py \
+python -m debugpy --listen 1234 --wait-for-client '/root/anaconda3/envs/vla-adapter/bin/torchrun' --standalone --nnodes 1 --nproc-per-node 1 vla-scripts/finetune.py \
   --vlm_path $vlm_path \
   --config_file_path $config_file_path \
   --data_root_dir $data_root_dir \

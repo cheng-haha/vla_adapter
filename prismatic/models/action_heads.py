@@ -5,6 +5,7 @@ Implementations of various action heads, which serve as alternatives to VLM sequ
 """
 
 import math
+from typing import Tuple
 import torch
 import torch.nn as nn
 from prismatic.vla.constants import ACTION_DIM, ACTION_TOKEN_BEGIN_IDX, IGNORE_INDEX, NUM_ACTIONS_CHUNK, PROPRIO_DIM, STOP_INDEX, NUM_TOKENS
@@ -63,7 +64,7 @@ class ActionTokenPooling(nn.Module):
                 raise ValueError("For mean/max pooling, num_tokens must be divisible by num_chunks.")
             tokens_per_chunk = self.num_tokens // self.num_chunks
             
-            x = x.view(B, self.num_chunks, tokens_per_chunk, D)
+            x = x.reshape(B, self.num_chunks, tokens_per_chunk, D)
             if self.pooling_type == "mean":
                 pooled = x.mean(dim=2)
             else: # max
@@ -74,12 +75,12 @@ class ActionTokenPooling(nn.Module):
             if self.num_tokens % self.num_chunks != 0:
                 raise ValueError("For attention pooling, num_tokens must be divisible by num_chunks.")
             tokens_per_chunk = self.num_tokens // self.num_chunks
-            x_reshaped = x.view(B * self.num_chunks, tokens_per_chunk, D)
+            x_reshaped = x.reshape(B * self.num_chunks, tokens_per_chunk, D)
 
             attn_weights = torch.softmax(self.attention(x_reshaped), dim=1)
             pooled = torch.sum(x_reshaped * attn_weights, dim=1)
             
-            return pooled.view(B, self.num_chunks, D)
+            return pooled.reshape(B, self.num_chunks, D)
 
         elif self.pooling_type == "weighted":
             outputs = []
@@ -93,6 +94,38 @@ class ActionTokenPooling(nn.Module):
 
         else:
             raise ValueError(f"Unknown pooling type: {self.pooling_type}")
+
+
+class CoarseActionHead(nn.Module):
+    """
+    A lightweight head to generate a coarse action prediction and intermediate representation
+    from pooled action token hidden states.
+    """
+    def __init__(self, hidden_dim: int, action_dim: int):
+        super().__init__()
+        self.net = nn.Sequential(
+            nn.LayerNorm(hidden_dim),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.ReLU(),
+            nn.LayerNorm(hidden_dim),
+        )
+        self.action_predictor = nn.Linear(hidden_dim, action_dim)
+
+    def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+        """
+        Forward pass.
+
+        Args:
+            x (torch.Tensor): Input tensor of shape (B, NUM_ACTIONS_CHUNK, D).
+
+        Returns:
+            Tuple[torch.Tensor, torch.Tensor]: A tuple containing:
+                - coarse_action (torch.Tensor): Coarse action prediction of shape (B, NUM_ACTIONS_CHUNK, ACTION_DIM).
+                - representation (torch.Tensor): Intermediate representation of shape (B, NUM_ACTIONS_CHUNK, D).
+        """
+        representation = self.net(x)
+        coarse_action = self.action_predictor(representation)
+        return coarse_action, representation
 
 
 def learnable_random_perturbations(seq_len, dim, device, dtype):
@@ -128,19 +161,11 @@ class L1RegressionActionHead(nn.Module):
                 num_tokens=NUM_TOKENS,
                 num_chunks=NUM_ACTIONS_CHUNK
             )
-            # Lightweight head for generating a coarse action prediction.
-            # It takes the flattened hidden states of the action tokens from the last layer of the LLM.
-            self.coarse_action_head = nn.Sequential(
-                nn.LayerNorm(hidden_dim),
-                nn.Linear(hidden_dim, hidden_dim),
-                nn.ReLU(),
-                nn.LayerNorm(hidden_dim),
-                nn.Linear(hidden_dim, self.action_dim),
-            )
+            self.coarse_action_head = CoarseActionHead(hidden_dim, self.action_dim)
 
         self.model = MLPResNet(
             num_blocks=24,
-            input_dim=input_dim * ACTION_DIM,
+            input_dim=action_dim * input_dim if not self.action_probing else hidden_dim,
             hidden_dim=hidden_dim,
             output_dim=action_dim,
             use_pro_version=use_pro_version,
@@ -152,7 +177,7 @@ class L1RegressionActionHead(nn.Module):
             proprio=None, 
             proprio_projector=None,
             phase="Inference"
-            ):
+            ) -> Tuple[torch.Tensor, torch.Tensor | None]:
         batch_size = actions_hidden_states.shape[0]
         device = actions_hidden_states.device
 
@@ -170,13 +195,9 @@ class L1RegressionActionHead(nn.Module):
             # Pool action tokens into action chunks
             pooled_actions_hidden = self.token_pooler(last_layer_actions_hidden) # (B, NUM_ACTIONS_CHUNK, D)
 
-            # Get coarse action prediction
-            coarse_action = self.coarse_action_head(pooled_actions_hidden)  # (B, NUM_ACTIONS_CHUNK, ACTION_DIM)
-
-            # Reshape coarse action to condition the main model
-            rearranged_actions_hidden_states = coarse_action.reshape(
-                batch_size, NUM_ACTIONS_CHUNK, self.action_dim
-            )
+            # Get coarse action prediction and intermediate representation
+            coarse_action, representation = self.coarse_action_head(pooled_actions_hidden)
+            rearranged_actions_hidden_states = representation
 
         else:
             cond_actions_hidden_states = torch.zeros(
@@ -199,7 +220,8 @@ class L1RegressionActionHead(nn.Module):
 
         action = self.model(rearranged_actions_hidden_states, h_a=actions_hidden_states, p=proprio_features, h_t=task_hidden_states)
 
-        return action
+        coarse_action_to_return = coarse_action if self.action_probing else None
+        return action, coarse_action_to_return
     
 
 class MLPResNet(nn.Module):

@@ -412,14 +412,20 @@ def run_forward_pass(
             multi_layer_hidden_states.append(all_hidden_states)
         multi_layer_hidden_states = torch.cat(multi_layer_hidden_states, dim = 1)
 
-        predicted_actions = action_head.module.predict_action(
+        predicted_actions, coarse_actions = action_head.module.predict_action(
             multi_layer_hidden_states,
             proprio=batch["proprio"] if use_proprio else None,
             proprio_projector=proprio_projector if use_proprio else None,
             phase=cfg.phase,
             )
 
-        loss = torch.nn.L1Loss()(predicted_actions, ground_truth_actions)
+        main_loss = torch.nn.L1Loss()(predicted_actions, ground_truth_actions)
+        if cfg.action_probing and coarse_actions is not None:
+            coarse_loss = torch.nn.L1Loss()(coarse_actions, ground_truth_actions)
+            loss = main_loss + coarse_loss
+            metrics["coarse_action_l1_loss"] = coarse_loss.item()
+        else:
+            loss = main_loss
 
         metrics.update(
             {
@@ -438,7 +444,7 @@ def run_forward_pass(
             next_actions_l1_loss = torch.nn.L1Loss()(ground_truth_next_actions, predicted_next_actions)
             # if compute_diffusion_l1:
             print(f"Losses - Current Action: {curr_action_l1_loss.item():.6f}, Next Actions: {next_actions_l1_loss.item():.6f}")
-                # print('next: ',next_actions_l1_loss.item())
+            # print('next: ',next_actions_l1_loss.item())
 
             metrics.update(
                 {
@@ -446,6 +452,18 @@ def run_forward_pass(
                     "next_actions_l1_loss": next_actions_l1_loss.item(),
                 }
             )
+            if cfg.action_probing and coarse_actions is not None:
+                coarse_curr_action = coarse_actions[:, 0]
+                coarse_next_actions = coarse_actions[:, 1:]
+                coarse_curr_action_l1_loss = torch.nn.L1Loss()(ground_truth_curr_action, coarse_curr_action)
+                coarse_next_actions_l1_loss = torch.nn.L1Loss()(ground_truth_next_actions, coarse_next_actions)
+                print(f"Coarse Losses - Current Coarse Action: {coarse_curr_action_l1_loss.item():.6f}, Next Coarse Actions: {coarse_next_actions_l1_loss.item():.6f}")
+                metrics.update(
+                    {
+                        "coarse_curr_action_l1_loss": coarse_curr_action_l1_loss.item(),
+                        "coarse_next_actions_l1_loss": coarse_next_actions_l1_loss.item(),
+                    }
+                )
 
     # Return both the loss tensor (with gradients) and the metrics dictionary (with detached values)
     return loss, metrics
