@@ -114,7 +114,7 @@ def convert_to_pil_image(image_data: Any) -> Image.Image:
     elif isinstance(image_data, list):
         # Convert list (from msgpack) to numpy array then to PIL Image
         np_array = np.array(image_data, dtype=np.uint8)
-        return Image.fromarray(np_array).convert("RGB")
+        return np_array
     else:
         raise ValueError(f"Unsupported image data type: {type(image_data)}")
 
@@ -240,7 +240,7 @@ class VLAServer:
                 action_head=self.action_head,
                 proprio_projector=self.proprio_projector,
             )
-
+            
             return {"actions": actions.tolist()}
 
         except msgpack.UnpackException:

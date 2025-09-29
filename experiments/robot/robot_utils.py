@@ -15,6 +15,18 @@ from experiments.robot.openvla_utils import (
     get_vla_action,
 )
 
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
+import logging
+
+# Set up logging
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    handlers=[logging.StreamHandler()],
+)
+logger = logging.getLogger(__name__)
+
 # Initialize important constants
 ACTION_DIM = 7
 DATE = time.strftime("%Y_%m_%d")
@@ -36,32 +48,72 @@ MODEL_IMAGE_SIZES = {
     # Add other models as needed
 }
 
+def _default_numpy_encoder(obj: Any) -> Any:
+    """Encode numpy arrays to lists for msgpack serialization."""
+    if isinstance(obj, np.ndarray):
+        return obj.tolist()
+    raise TypeError(f"Object of type {type(obj).__name__} is not serializable")
+
+
 
 class MsgPackHttpClientPolicy:
-    """A simple client that queries a VLA server for actions."""
+    """A client policy for communicating with a VLA server using MessagePack."""
 
-    def __init__(self, url: str):
-        # Prepend "http://" if scheme is missing
-        if "://" not in url:
-            self.url = f"http://{url}"
+    def __init__(self, host: str, port: int=None):
+        """
+        Initializes the client.
+
+        Args:
+            host (str): The server host address.
+            port (int): The server port.
+        """
+        protocol = "https" if "nat-notebook-inspire" in host or "ngrok" in host else "http"
+        if host.startswith("http"):
+            base_url = host
         else:
-            self.url = url
+            base_url = f"{protocol}://{host}:{port}"
+        
+        self.infer_url = f"{base_url.rstrip('/')}/act"
+        self.session = requests.Session()
+        # Robust retries for occasional connection resets from server
+        retries = Retry(
+            total=3,
+            connect=3,
+            read=3,
+            backoff_factor=0.2,
+            status_forcelist=(502, 503, 504),
+            raise_on_status=False,
+            allowed_methods=frozenset(["POST", "GET"]),
+        )
+        adapter = HTTPAdapter(max_retries=retries)
+        self.session.mount("http://", adapter)
+        self.session.mount("https://", adapter)
+        self.session.headers.update({"Content-Type": "application/msgpack"})
+        print(f"Standalone MsgPack HTTP Client configured for: {self.infer_url}")
 
-    def infer(self, obs: Dict[str, Any]) -> Dict[str, Any]:
-        """Send observation to server and return response."""
+    def infer(self, observation: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+        """
+        Sends an observation to the server and returns the predicted action.
+
+        Args:
+            observation (Dict[str, Any]): The observation dictionary.
+
+        Returns:
+            Dict[str, Any]: The action dictionary from the server.
+        """
+        packed_observation = msgpack.packb(observation, default=_default_numpy_encoder, use_bin_type=True)
         try:
-            # The requests library will automatically use the proxy settings from
-            # the environment variables (e.g. `HTTP_PROXY`, `HTTPS_PROXY`).
-            response = requests.post(
-                self.url,
-                data=msgpack.packb(obs, use_bin_type=True),
-                headers={"Content-Type": "application/msgpack"},
-                timeout=120,
-            )
+            response = self.session.post(self.infer_url, data=packed_observation, timeout=30)
             response.raise_for_status()
             return msgpack.unpackb(response.content, raw=False)
         except requests.exceptions.RequestException as e:
-            raise ConnectionError(f"Failed to connect to VLA server at {self.url}: {e}")
+            logger.error(f"Inference request failed: {e}")
+            # Propagate exception to let the main loop handle it
+            raise e
+        except msgpack.UnpackException as e:
+            logger.error(f"Failed to unpack server response: {e}")
+            raise e
+
 
 
 def set_seed_everywhere(seed: int) -> None:

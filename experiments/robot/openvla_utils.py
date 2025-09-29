@@ -822,7 +822,9 @@ def get_vla_action(
             )
 
     # Extract subset of actions for open loop steps
-    return [action[i] for i in range(min(len(action), cfg.num_open_loop_steps))]
+    # return [action[i] for i in range(min(len(action), cfg.num_open_loop_steps))]
+    return action
+
 
 
 def get_action_from_server(
