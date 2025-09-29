@@ -2,8 +2,8 @@
 ###
  # @Description: 
  # @Date: 2025-09-25 22:13:40
- # @LastEditTime: 2025-09-28 21:56:15
- # @FilePath: \vla_adapter\run_scripts\train\vla_adapter\libero\libero_10.sh
+ # @LastEditTime: 2025-09-29 21:20:02
+ # @FilePath: \vla_adapter\run_scripts\train\vla_adapter\libero\libero_10_c2f.sh
 ### 
 
 #========== Basic Settings ==========#
@@ -23,8 +23,8 @@ config_file_path=pretrained_models/configs
 batch_size=16
 grad_accumulation_steps=1
 learning_rate=2e-4
-max_steps=300005
-num_steps_before_decay=150000
+max_steps=50005
+num_steps_before_decay=25000
 save_freq=10000
 
 # Model configuration

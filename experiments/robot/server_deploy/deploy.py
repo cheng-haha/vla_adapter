@@ -1,0 +1,249 @@
+"""
+deploy.py
+
+Starts VLA server which the client can query to get robot actions.
+"""
+import logging
+import traceback
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any, Dict, Union
+import time
+import sys
+
+import draccus
+import msgpack
+import torch
+import uvicorn
+import numpy as np
+from fastapi import FastAPI, HTTPException, Request, Response
+from PIL import Image
+
+# Append project root to sys.path
+sys.path.append("../..")
+
+from experiments.robot.openvla_utils import (
+    get_action_head,
+    get_processor,
+    get_proprio_projector,
+)
+from experiments.robot.robot_utils import (
+    get_action,
+    get_image_resize_size,
+    get_model,
+    set_seed_everywhere,
+)
+
+
+# Set up logging to display timestamp, level, and message
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s.%(msecs)03d [%(levelname)s] %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+    handlers=[logging.StreamHandler()],
+)
+
+
+@dataclass
+class DeployConfig:
+    # fmt: off
+
+    # Server Configuration
+    host: str = "0.0.0.0"                                               # Host IP Address
+    port: int = 8000                                                    # Host Port
+    device: str = "cuda:0"                                              # Device to run model on
+
+    #################################################################################################################
+    # Model-specific parameters
+    #################################################################################################################
+    model_family: str = "openvla"                    # Model family
+    pretrained_checkpoint: Union[str, Path] = ""     # Pretrained checkpoint path
+
+    # Continuous action head
+    use_l1_regression: bool = True                   # If True, uses continuous action head with L1 regression objective
+
+    # Input modality support
+    num_images_in_input: int = 2                     # Number of images in the VLA input
+    use_proprio: bool = True                         # Whether to include proprio state in input
+
+    # Image processing
+    center_crop: bool = True                         # Center crop? (if trained w/ random crop image aug)
+
+    # Quantization
+    load_in_8bit: bool = False                       # (For OpenVLA only) Load with 8-bit quantization
+    load_in_4bit: bool = False                       # (For OpenVLA only) Load with 4-bit quantization
+
+    #################################################################################################################
+    # Utils
+    #################################################################################################################
+    seed: int = 7                                    # Random Seed (for reproducibility)
+    save_version: str = "vla-adapter"                # Version of the model
+    # fmt: on
+
+
+def convert_to_pil_image(image_data: Any) -> Image.Image:
+    """
+    Convert various image data formats to PIL.Image.
+    
+    Args:
+        image_data: Image data in various formats (list, numpy array, PIL.Image, etc.)
+        
+    Returns:
+        PIL.Image: Converted PIL Image in RGB format
+    """
+    if isinstance(image_data, Image.Image):
+        return image_data.convert("RGB")
+    elif isinstance(image_data, np.ndarray):
+        return Image.fromarray(image_data).convert("RGB")
+    elif isinstance(image_data, list):
+        # Convert list (from msgpack) to numpy array then to PIL Image
+        np_array = np.array(image_data, dtype=np.uint8)
+        return Image.fromarray(np_array).convert("RGB")
+    else:
+        raise ValueError(f"Unsupported image data type: {type(image_data)}")
+
+
+def process_batch_images(batch: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Process and convert images in the batch to PIL.Image format.
+    
+    Args:
+        batch: Input batch dictionary containing image data
+        
+    Returns:
+        Dict[str, Any]: Processed batch with PIL Images
+    """
+    processed_batch = batch.copy()
+    
+    # Convert full_image if present
+    if "full_image" in batch and batch["full_image"] is not None:
+        processed_batch["full_image"] = convert_to_pil_image(batch["full_image"])
+    
+    # Convert wrist_image if present
+    if "wrist_image" in batch and batch["wrist_image"] is not None:
+        processed_batch["wrist_image"] = convert_to_pil_image(batch["wrist_image"])
+    
+    return processed_batch
+
+
+def initialize_model(cfg: DeployConfig):
+    """Initialize model and associated components."""
+    # Load model
+    model = get_model(cfg)
+    model.set_version(cfg.save_version)
+
+    # Load proprio projector if needed
+    proprio_projector = None
+    if cfg.use_proprio:
+        proprio_projector = get_proprio_projector(
+            cfg,
+            model.llm_dim,
+            proprio_dim=8,  # 8-dimensional proprio for LIBERO
+        )
+
+    # Load action head if needed
+    action_head = None
+    if cfg.use_l1_regression:
+        action_head = get_action_head(cfg, model.llm_dim)
+
+    # Get OpenVLA processor
+    processor = get_processor(cfg)
+
+
+    return model, processor, action_head, proprio_projector
+
+
+class MsgPackResponse(Response):
+    """Custom FastAPI Response class to automatically encode response data into MessagePack."""
+
+    media_type = "application/msgpack"
+
+    def render(self, content: Any) -> bytes:
+        return msgpack.packb(content, use_bin_type=True)
+
+
+# === Server Interface ===
+class VLAServer:
+    def __init__(self, cfg: DeployConfig):
+        """
+        A simple server for VLA models, exposing `/act` endpoint.
+        This server receives observations and instructions via MessagePack,
+        and returns predicted actions in MessagePack format.
+        """
+        self.cfg = cfg
+        (
+            self.model,
+            self.processor,
+            self.action_head,
+            self.proprio_projector,
+        ) = initialize_model(cfg)
+        self.resize_size = get_image_resize_size(cfg)
+        set_seed_everywhere(self.cfg.seed)
+        self.app = FastAPI()
+
+        @self.app.middleware("http")
+        async def log_requests(request: Request, call_next):
+            """
+            Middleware to log request details including processing time.
+            """
+            start_time = time.time()
+            response = await call_next(request)
+            process_time = (time.time() - start_time) * 1000  # in milliseconds
+            logging.info(f'"{request.method} {request.url.path}" {response.status_code} - {process_time:.2f}ms')
+            return response
+
+        self.app.post("/act", response_class=MsgPackResponse)(self.get_server_action)
+
+    async def get_server_action(self, request: Request) -> Dict[str, Any]:
+        """Handles a single action prediction request using MessagePack."""
+        if request.headers.get("content-type") != "application/msgpack":
+            raise HTTPException(
+                status_code=415, detail="Unsupported Media Type. 'application/msgpack' is required."
+            )
+        try:
+            body = await request.body()
+            batch = msgpack.unpackb(body, raw=False)
+            
+            # Extract unnorm_key and instruction from the batch
+            unnorm_key = batch.pop("unnorm_key")
+            instruction = batch.pop("instruction")
+
+            # Convert images from msgpack format to PIL.Image format
+            processed_batch = process_batch_images(batch)
+
+            # Update cfg with the unnorm_key from the client
+            self.cfg.unnorm_key = unnorm_key
+
+            # Use get_action to get model's prediction
+            actions = get_action(
+                self.cfg,
+                self.model,
+                processed_batch,
+                instruction,
+                processor=self.processor,
+                action_head=self.action_head,
+                proprio_projector=self.proprio_projector,
+            )
+
+            return {"actions": actions.tolist()}
+
+        except msgpack.UnpackException:
+            raise HTTPException(status_code=400, detail="Invalid MessagePack data provided.")
+        except Exception:
+            logging.error(traceback.format_exc())
+            # Re-raise as a generic 500 error to avoid leaking implementation details.
+            raise HTTPException(status_code=500, detail="An internal server error occurred.")
+
+    def run(self) -> None:
+        """Starts the Uvicorn server."""
+        uvicorn.run(self.app, host=self.cfg.host, port=self.cfg.port, access_log=False, timeout_keep_alive=120)
+
+
+@draccus.wrap()
+def deploy(cfg: DeployConfig) -> None:
+    server = VLAServer(cfg)
+    server.run()
+
+
+if __name__ == "__main__":
+    deploy()

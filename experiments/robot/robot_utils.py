@@ -7,6 +7,8 @@ from typing import Any, Dict, List, Optional, Union
 
 import numpy as np
 import torch
+import requests
+import msgpack
 
 from experiments.robot.openvla_utils import (
     get_vla,
@@ -33,6 +35,33 @@ MODEL_IMAGE_SIZES = {
     "openvla": 224,
     # Add other models as needed
 }
+
+
+class MsgPackHttpClientPolicy:
+    """A simple client that queries a VLA server for actions."""
+
+    def __init__(self, url: str):
+        # Prepend "http://" if scheme is missing
+        if "://" not in url:
+            self.url = f"http://{url}"
+        else:
+            self.url = url
+
+    def infer(self, obs: Dict[str, Any]) -> Dict[str, Any]:
+        """Send observation to server and return response."""
+        try:
+            # The requests library will automatically use the proxy settings from
+            # the environment variables (e.g. `HTTP_PROXY`, `HTTPS_PROXY`).
+            response = requests.post(
+                self.url,
+                data=msgpack.packb(obs, use_bin_type=True),
+                headers={"Content-Type": "application/msgpack"},
+                timeout=120,
+            )
+            response.raise_for_status()
+            return msgpack.unpackb(response.content, raw=False)
+        except requests.exceptions.RequestException as e:
+            raise ConnectionError(f"Failed to connect to VLA server at {self.url}: {e}")
 
 
 def set_seed_everywhere(seed: int) -> None:
