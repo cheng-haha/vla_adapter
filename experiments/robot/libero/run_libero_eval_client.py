@@ -518,7 +518,7 @@ def eval_libero(cfg: GenerateConfig) -> float:
     # Initialize model and components or client
     client, model, processor, action_head, proprio_projector, noisy_action_projector = [None] * 6
     if cfg.use_vla_server:
-        client = MsgPackHttpClientPolicy(url=cfg.vla_server_url)
+        client = MsgPackHttpClientPolicy(host=cfg.vla_server_url)
         check_unnorm_key(cfg)  # Check unnorm_key in client mode
     else:
         model, action_head, proprio_projector, noisy_action_projector, processor = initialize_model(cfg)

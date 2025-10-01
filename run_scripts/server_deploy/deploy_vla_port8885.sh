@@ -1,9 +1,15 @@
 PROJECT_PATH=VLA-Adapter
+###
+ # @Description: 
+ # @Date: 2025-09-29 19:41:56
+ # @LastEditTime: 2025-09-29 21:07:52
+ # @FilePath: \vla_adapter\run_scripts\server_deploy\deploy_vla_port8886.sh
+### 
 export PYTHONPATH=/inspire/hdd/global_user/chengdongzhou-240108390137/vla_projects/$PROJECT_PATH
-pretrained_checkpoint=/inspire/hdd/global_user/chengdongzhou-240108390137/vla_projects/VLA-Adapter/outputs/libero_4_task_suites_no_noops/img2_miniTrue_propTrue_proTrue_filmFalse/configs+libero_4_task_suites_no_noops+b16+lr-0.0002+lora-r64+dropout-0.0--image_aug--vla--20250926_201005--135000_chkpt
-port=8888
+pretrained_checkpoint=/inspire/hdd/global_user/chengdongzhou-240108390137/ai_models/VLA-Adapter/LIBERO-Long-Pro
+port=8885
 model_family=openvla
-device=2
+device=0
 
 python experiments/robot/server_deploy/deploy.py \
         --pretrained_checkpoint $pretrained_checkpoint \

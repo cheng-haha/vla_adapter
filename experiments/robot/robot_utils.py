@@ -9,6 +9,7 @@ import numpy as np
 import torch
 import requests
 import msgpack
+import msgpack_numpy
 
 from experiments.robot.openvla_utils import (
     get_vla,
@@ -47,13 +48,6 @@ MODEL_IMAGE_SIZES = {
     "openvla": 224,
     # Add other models as needed
 }
-
-def _default_numpy_encoder(obj: Any) -> Any:
-    """Encode numpy arrays to lists for msgpack serialization."""
-    if isinstance(obj, np.ndarray):
-        return obj.tolist()
-    raise TypeError(f"Object of type {type(obj).__name__} is not serializable")
-
 
 
 class MsgPackHttpClientPolicy:
@@ -101,11 +95,11 @@ class MsgPackHttpClientPolicy:
         Returns:
             Dict[str, Any]: The action dictionary from the server.
         """
-        packed_observation = msgpack.packb(observation, default=_default_numpy_encoder, use_bin_type=True)
+        packed_observation = msgpack.packb(observation, default=msgpack_numpy.encode, use_bin_type=True)
         try:
             response = self.session.post(self.infer_url, data=packed_observation, timeout=30)
             response.raise_for_status()
-            return msgpack.unpackb(response.content, raw=False)
+            return msgpack.unpackb(response.content, object_hook=msgpack_numpy.decode, raw=False)
         except requests.exceptions.RequestException as e:
             logger.error(f"Inference request failed: {e}")
             # Propagate exception to let the main loop handle it

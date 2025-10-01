@@ -6,9 +6,9 @@ PROJECT_PATH=VLA-Adapter
  # @FilePath: \vla_adapter\run_scripts\server_deploy\deploy_vla_port8887.sh
 ### 
 export PYTHONPATH=/inspire/hdd/global_user/chengdongzhou-240108390137/vla_projects/$PROJECT_PATH
-pretrained_checkpoint=/inspire/hdd/global_user/chengdongzhou-240108390137/vla_projects/nora/outputs/da_libero_4_task_suites_no_noops_dinotrue_coarse_true_fine_true_vlm_qwen2_5_vl_mt_metavla_rs_libero_lr_5e-5_bs_16_gas_1_ws_0.1_ms_60000_ia_true_acl_4_acm_1_neq_4_ant_layernorm/steps_60000
+pretrained_checkpoint=/inspire/hdd/global_user/chengdongzhou-240108390137/vla_projects/VLA-Adapter/outputs/libero_4_task_suites_no_noops/img2_miniTrue_propTrue_proTrue_filmFalse/configs+libero_4_task_suites_no_noops+b16+lr-0.0002+lora-r64+dropout-0.0--image_aug--vla--20250926_201005--135000_chkpt
 port=8887
-model_family=metavla
+model_family=openvla
 device=1
 
 python experiments/robot/server_deploy/deploy.py \

@@ -6,7 +6,7 @@ PROJECT_PATH=VLA-Adapter
  # @FilePath: \vla_adapter\run_scripts\server_deploy\deploy_vla_port8886.sh
 ### 
 export PYTHONPATH=/inspire/hdd/global_user/chengdongzhou-240108390137/vla_projects/$PROJECT_PATH
-pretrained_checkpoint=/inspire/hdd/global_user/chengdongzhou-240108390137/vla_projects/VLA-Adapter/outputs/libero_4_task_suites_no_noops/img2_miniTrue_propTrue_proTrue_filmFalse/configs+libero_4_task_suites_no_noops+b16+lr-0.0002+lora-r64+dropout-0.0--image_aug--vla--20250926_201005--135000_chkpt
+pretrained_checkpoint=/inspire/hdd/global_user/chengdongzhou-240108390137/vla_projects/VLA-Adapter/outputs/libero_10_no_noops/img2_miniTrue_propTrue_proTrue_filmFalse/configs+libero_10_no_noops+b16+lr-0.0002+MS-300005-DS-150000+lora-r64+dropout-0.0--image_aug--vla--20250928_181656--110000_chkpt
 port=8886
 model_family=openvla
 device=0

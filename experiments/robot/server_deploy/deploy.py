@@ -18,6 +18,7 @@ import uvicorn
 import numpy as np
 from fastapi import FastAPI, HTTPException, Request, Response
 from PIL import Image
+import msgpack_numpy
 
 # Append project root to sys.path
 sys.path.append("../..")
@@ -97,51 +98,6 @@ class DeployConfig:
 
 
 
-def convert_to_pil_image(image_data: Any) -> Image.Image:
-    """
-    Convert various image data formats to PIL.Image.
-    
-    Args:
-        image_data: Image data in various formats (list, numpy array, PIL.Image, etc.)
-        
-    Returns:
-        PIL.Image: Converted PIL Image in RGB format
-    """
-    if isinstance(image_data, Image.Image):
-        return image_data.convert("RGB")
-    elif isinstance(image_data, np.ndarray):
-        return Image.fromarray(image_data).convert("RGB")
-    elif isinstance(image_data, list):
-        # Convert list (from msgpack) to numpy array then to PIL Image
-        np_array = np.array(image_data, dtype=np.uint8)
-        return np_array
-    else:
-        raise ValueError(f"Unsupported image data type: {type(image_data)}")
-
-
-def process_batch_images(batch: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Process and convert images in the batch to PIL.Image format.
-    
-    Args:
-        batch: Input batch dictionary containing image data
-        
-    Returns:
-        Dict[str, Any]: Processed batch with PIL Images
-    """
-    processed_batch = batch.copy()
-    
-    # Convert full_image if present
-    if "full_image" in batch and batch["full_image"] is not None:
-        processed_batch["full_image"] = convert_to_pil_image(batch["full_image"])
-    
-    # Convert wrist_image if present
-    if "wrist_image" in batch and batch["wrist_image"] is not None:
-        processed_batch["wrist_image"] = convert_to_pil_image(batch["wrist_image"])
-    
-    return processed_batch
-
-
 def initialize_model(cfg: DeployConfig):
     """Initialize model and associated components."""
     # Load model
@@ -175,7 +131,7 @@ class MsgPackResponse(Response):
     media_type = "application/msgpack"
 
     def render(self, content: Any) -> bytes:
-        return msgpack.packb(content, use_bin_type=True)
+        return msgpack.packb(content, default=msgpack_numpy.encode, use_bin_type=True)
 
 
 # === Server Interface ===
@@ -218,14 +174,11 @@ class VLAServer:
             )
         try:
             body = await request.body()
-            batch = msgpack.unpackb(body, raw=False)
+            batch = msgpack.unpackb(body, object_hook=msgpack_numpy.decode, raw=False)
             
             # Extract unnorm_key and instruction from the batch
             unnorm_key = batch.pop("unnorm_key")
             instruction = batch.pop("instruction")
-
-            # Convert images from msgpack format to PIL.Image format
-            processed_batch = process_batch_images(batch)
 
             # Update cfg with the unnorm_key from the client
             self.cfg.unnorm_key = unnorm_key
@@ -234,7 +187,7 @@ class VLAServer:
             actions = get_action(
                 self.cfg,
                 self.model,
-                processed_batch,
+                batch,
                 instruction,
                 processor=self.processor,
                 action_head=self.action_head,
