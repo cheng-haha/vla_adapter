@@ -50,12 +50,13 @@ def main(cfg: ConvertConfig) -> None:
 
     if cfg.use_minivla:
         hf_token = ''
-        vlm = load_vla(
-            cfg.vlm_path,
+        vlm_path = Path(cfg.vlm_path)
+        vlm = load(
+            vlm_path,
             hf_token=hf_token,
             load_for_training=True,
             )
-        config = AutoConfig.from_pretrained("../pretrained_models/configs/config.json")
+        config = AutoConfig.from_pretrained("pretrained_models/configs/config.json")
         vla = AutoModelForVision2Seq.from_config(config, torch_dtype=torch.bfloat16)
         # for name, param in model.named_parameters():
         #     print(f"{name}: {param.shape}")
@@ -83,6 +84,7 @@ def main(cfg: ConvertConfig) -> None:
         RAW_STATE_DICT = rename_state_dict_keys(old_state_dict, replace_map)
     
         missing_keys, unexpected_keys = vla.load_state_dict(RAW_STATE_DICT, strict=False)
+
     else:
         # Load Model using HF AutoClasses
         print(f"Loading base model: {cfg.base_checkpoint}")
@@ -92,7 +94,9 @@ def main(cfg: ConvertConfig) -> None:
             low_cpu_mem_usage=True,
             trust_remote_code=True,
         )
-
+        
+    print(f"Missing keys: {missing_keys}")
+    print(f"Unexpected keys: {unexpected_keys}")
     # Load LoRA weights and merge into base model, then save final checkpoint
     print("Merging LoRA weights into base model...")
     start_time = time.time()
