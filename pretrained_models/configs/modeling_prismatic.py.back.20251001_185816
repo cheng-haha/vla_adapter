@@ -865,7 +865,7 @@ class OpenVLAForActionPrediction(PrismaticForConditionalGeneration):
         # Handle different prediction methods
         if action_head is not None:
             # L1 regression prediction
-            normalized_actions, coarse_actions = action_head.predict_action(multi_layer_hidden_states,
+            normalized_actions = action_head.predict_action(multi_layer_hidden_states,
                                                 proprio=proprio,
                                                 proprio_projector=proprio_projector)
             normalized_actions = normalized_actions.reshape(NUM_ACTIONS_CHUNK, ACTION_DIM)
