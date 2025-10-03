@@ -656,6 +656,9 @@ def save_training_checkpoint(
         if cfg.use_l1_regression and action_head is not None:
             torch.save(action_head.state_dict(), checkpoint_dir / f"action_head--{checkpoint_name_suffix}")
 
+        # Save action_queries weights
+        torch.save(vla.module.action_queries.state_dict(), checkpoint_dir / f"action_queries--{checkpoint_name_suffix}")
+
         if cfg.use_film:
             # To be safe, just save the entire vision backbone (not just FiLM components)
             torch.save(

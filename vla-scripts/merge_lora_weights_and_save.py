@@ -26,6 +26,22 @@ from prismatic.extern.hf.processing_prismatic import PrismaticImageProcessor, Pr
 from prismatic.models import load, load_vla
 
 
+def find_checkpoint(checkpoints_dir: Path, module_name: str) -> Path:
+    """Finds the latest checkpoint file for a given module in the specified directory."""
+    pt_files = sorted(checkpoints_dir.glob(f"{module_name}--*_checkpoint.pt"))
+    if not pt_files:
+        # Fallback for older checkpoint naming convention
+        pt_files = sorted(checkpoints_dir.glob(f"step-*-{module_name}.pt"))
+        if not pt_files:
+            # Fallback for legacy naming convention
+            pt_files = sorted(checkpoints_dir.glob(f"*{module_name}.pt"))
+            if not pt_files:
+                raise FileNotFoundError(f"No checkpoints found for module '{module_name}' in {checkpoints_dir}")
+
+    checkpoint_path = pt_files[-1]
+    print(f"Found latest '{module_name}' checkpoint: {checkpoint_path.name}")
+    return checkpoint_path
+
 
 @dataclass
 class ConvertConfig:
@@ -82,7 +98,16 @@ def main(cfg: ConvertConfig) -> None:
         
         old_state_dict = vlm.state_dict()
         RAW_STATE_DICT = rename_state_dict_keys(old_state_dict, replace_map)
-    
+
+        # Manually load action_queries weights
+        try:
+            action_queries_checkpoint_path = find_checkpoint(vlm_path, "action_queries")
+            action_queries_state_dict = torch.load(action_queries_checkpoint_path, map_location="cpu")
+            RAW_STATE_DICT["action_queries.weight"] = action_queries_state_dict["weight"]
+            print("Successfully loaded 'action_queries' weights.")
+        except FileNotFoundError as e:
+            print(f"Warning: {e}. 'action_queries' weights will be randomly initialized.")
+
         missing_keys, unexpected_keys = vla.load_state_dict(RAW_STATE_DICT, strict=False)
 
     else:
