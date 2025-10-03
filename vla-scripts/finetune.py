@@ -21,7 +21,7 @@ from huggingface_hub import HfApi, snapshot_download
 from peft import LoraConfig, PeftModel, get_peft_model
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.optim import AdamW
-from torch.optim.lr_scheduler import MultiStepLR, CosineAnnealingLR
+from torch.optim.lr_scheduler import MultiStepLR, CosineAnnealingLR, ExponentialLR
 from torch.utils.data import DataLoader
 from transformers import AutoConfig, AutoImageProcessor, AutoModelForVision2Seq, AutoProcessor
 from transformers.modeling_outputs import CausalLMOutputWithPast
@@ -89,7 +89,7 @@ class FinetuneConfig:
     # Training configuration
     batch_size: int = 8                              # Batch size per device (total batch size = batch_size * num GPUs)
     learning_rate: float = 5e-4                      # Learning rate
-    lr_warmup_steps: int = 0.1                       # Number of steps to warm up learning rate (from 10% to 100%)
+    lr_warmup_steps: int = 0                         # Number of steps to warm up learning rate (from 10% to 100%)
     num_steps_before_decay: int = 100000             # Number of steps before LR decays by 10x
     grad_accumulation_steps: int = 1                 # Number of gradient accumulation steps
     max_steps: int = 200000                          # Max number of training steps
@@ -956,7 +956,7 @@ def finetune(cfg: FinetuneConfig) -> None:
     # scheduler = CosineAnnealingLR(
     #         optimizer,
     #         T_max=cfg.num_steps_before_decay, 
-    #         eta_min=0.0001,          
+    #         eta_min=1e-8,          
     #         )
 
     # Create Action Tokenizer
@@ -1094,8 +1094,6 @@ def finetune(cfg: FinetuneConfig) -> None:
             if cfg.lr_warmup_steps > 0:
                 lr_progress = min((gradient_step_idx + 1) / cfg.lr_warmup_steps, 1.0)  # Cap at 1.0
                 current_lr = original_lr * (0.1 + 0.9 * lr_progress)
-                if distributed_state.is_main_process and log_step % cfg.wandb_log_freq == 0:
-                    print(f"Step {log_step} - Learning Rate: {current_lr:.10e}")
                 for param_group in optimizer.param_groups:
                     param_group["lr"] = current_lr
 
@@ -1108,6 +1106,7 @@ def finetune(cfg: FinetuneConfig) -> None:
                     },
                     step=log_step,
                 )
+                print(f"Step {log_step} - Learning Rate: {scheduler.get_last_lr()[0]:.10e}")
 
             # Optimizer and LR scheduler step
             if (batch_idx + 1) % cfg.grad_accumulation_steps == 0:
