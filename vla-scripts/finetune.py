@@ -130,6 +130,8 @@ class FinetuneConfig:
     action_probing: bool = False
     action_pooling_type: str = "attention"           # Pooling type for action tokens, options: "mean", "max", "attention", "weighted"
     merge_fine_tuning: bool = False
+    only_simple_action_head: bool = False
+    ensemble_hidden_state: bool = False
 
 
 def remove_ddp_in_checkpoint(state_dict) -> dict:
@@ -915,6 +917,8 @@ def finetune(cfg: FinetuneConfig) -> None:
             "use_pro_version": cfg.use_pro_version,
             "action_probing": cfg.action_probing,
             "action_pooling_type": cfg.action_pooling_type,
+            "only_simple_action_head": cfg.only_simple_action_head,
+            "ensemble_hidden_state": cfg.ensemble_hidden_state,
             },
         to_bf16=True,
         )
@@ -931,7 +935,12 @@ def finetune(cfg: FinetuneConfig) -> None:
     if cfg.use_proprio:
         trainable_params += [param for param in proprio_projector.parameters() if param.requires_grad]
     print(f"# total trainable params: {sum(p.numel() for p in trainable_params)}")
-    optimizer = AdamW(trainable_params, lr=cfg.learning_rate)
+    optimizer = AdamW(  trainable_params, 
+                        lr=cfg.learning_rate,
+                        # betas=(0.9, 0.95),
+                        # weight_decay=1e-8,
+                        # eps=1e-8,
+                        )
 
     # Record original learning rate
     original_lr = optimizer.param_groups[0]["lr"]
@@ -1086,7 +1095,7 @@ def finetune(cfg: FinetuneConfig) -> None:
                 lr_progress = min((gradient_step_idx + 1) / cfg.lr_warmup_steps, 1.0)  # Cap at 1.0
                 current_lr = original_lr * (0.1 + 0.9 * lr_progress)
                 if distributed_state.is_main_process and log_step % cfg.wandb_log_freq == 0:
-                    print(f"Step {log_step} - Learning Rate: {current_lr:.6e}")
+                    print(f"Step {log_step} - Learning Rate: {current_lr:.10e}")
                 for param_group in optimizer.param_groups:
                     param_group["lr"] = current_lr
 

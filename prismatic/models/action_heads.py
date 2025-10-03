@@ -96,18 +96,27 @@ class ActionTokenPooling(nn.Module):
             raise ValueError(f"Unknown pooling type: {self.pooling_type}")
 
 
-class CoarseActionHead(nn.Module):
+class SimpleActionHead(nn.Module):
     """
-    A lightweight head to generate a coarse action prediction and intermediate representation
+    A lightweight, stackable FFN head with residual connections to generate action predictions
     from pooled action token hidden states.
     """
-    def __init__(self, hidden_dim: int, action_dim: int):
+    def __init__(self, hidden_dim: int, action_dim: int, num_layers: int = 2, ffn_dim_multiplier: int = 1):
         super().__init__()
-        self.net = nn.Sequential(
+        
+        self.net = nn.ModuleList()
+        for _ in range(num_layers):
+            self.net.append(nn.Sequential(
+                nn.LayerNorm(hidden_dim),
+                nn.Linear(hidden_dim, hidden_dim * ffn_dim_multiplier),
+                nn.GELU(),
+                nn.Linear(hidden_dim * ffn_dim_multiplier, hidden_dim),
+            ))
+
+        self.connector = nn.Sequential(
             nn.LayerNorm(hidden_dim),
             nn.Linear(hidden_dim, hidden_dim),
-            nn.ReLU(),
-            nn.LayerNorm(hidden_dim),
+            nn.GELU(),
         )
         self.action_predictor = nn.Linear(hidden_dim, action_dim)
 
@@ -123,7 +132,10 @@ class CoarseActionHead(nn.Module):
                 - coarse_action (torch.Tensor): Coarse action prediction of shape (B, NUM_ACTIONS_CHUNK, ACTION_DIM).
                 - representation (torch.Tensor): Intermediate representation of shape (B, NUM_ACTIONS_CHUNK, D).
         """
-        representation = self.net(x)
+        representation = self.connector(x)
+        for block in self.net:
+            representation = representation + block(representation)
+
         coarse_action = self.action_predictor(representation)
         return coarse_action, representation
 
@@ -146,6 +158,8 @@ class L1RegressionActionHead(nn.Module):
         use_pro_version=False,
         action_probing=False,
         action_pooling_type="mean",
+        only_simple_action_head=False,
+        ensemble_hidden_state=False,
     ):
         super().__init__()
         self.num_task_tokens = num_task_tokens
@@ -153,23 +167,27 @@ class L1RegressionActionHead(nn.Module):
         self.hidden_dim = hidden_dim
         self.action_probing = action_probing
         self.action_pooling_type = action_pooling_type
+        self.only_simple_action_head = only_simple_action_head
+        self.ensemble_hidden_state = ensemble_hidden_state
 
-        if self.action_probing:
+        # always create the simple head components for probing or for simple head only mode
+        if self.action_probing or self.only_simple_action_head:
             self.token_pooler = ActionTokenPooling(
                 pooling_type=self.action_pooling_type,
                 input_dim=hidden_dim,
                 num_tokens=NUM_TOKENS,
                 num_chunks=NUM_ACTIONS_CHUNK
             )
-            self.coarse_action_head = CoarseActionHead(hidden_dim, self.action_dim)
+            self.coarse_action_head = SimpleActionHead(hidden_dim, self.action_dim)
 
-        self.model = MLPResNet(
-            num_blocks=24,
-            input_dim=action_dim * input_dim if not self.action_probing else hidden_dim,
-            hidden_dim=hidden_dim,
-            output_dim=action_dim,
-            use_pro_version=use_pro_version,
-        )
+        if not self.only_simple_action_head:
+            self.model = MLPResNet(
+                num_blocks=24,
+                input_dim=action_dim * input_dim if not self.action_probing else hidden_dim,
+                hidden_dim=hidden_dim,
+                output_dim=action_dim,
+                use_pro_version=use_pro_version,
+            )
 
     def predict_action(
             self, 
@@ -187,6 +205,21 @@ class L1RegressionActionHead(nn.Module):
 
         task_hidden_states = actions_hidden_states[:, :, : self.num_task_tokens, :]
         actions_hidden_states = actions_hidden_states[:, :, self.num_task_tokens :, :]
+
+        if self.only_simple_action_head:
+            if self.ensemble_hidden_state:
+                # Mean hidden states across all layers
+                actions_hidden_states = actions_hidden_states.mean(dim=1)  # (B, NUM_TOKENS, D)
+            else:
+                # Use the last layer's action hidden states
+                actions_hidden_states = actions_hidden_states[:, -1, :, :]  # (B, NUM_TOKENS, D)
+
+            # Pool action tokens into action chunks
+            pooled_actions_hidden = self.token_pooler(actions_hidden_states) # (B, NUM_ACTIONS_CHUNK, D)
+
+            # Get action prediction
+            action, _ = self.coarse_action_head(pooled_actions_hidden)
+            return action, None
 
         if self.action_probing:
             # Use the last layer's action hidden states

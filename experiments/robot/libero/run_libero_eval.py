@@ -127,7 +127,8 @@ class GenerateConfig:
     save_version: str = "vla-adapter"                # version of 
     use_pro_version: bool = True                     # encourage to use the pro models we released.
     phase: str = "Inference"
-
+    action_probing: bool = False
+    action_pooling_type: str = 'attention'
 
 
 def validate_config(cfg: GenerateConfig) -> None:

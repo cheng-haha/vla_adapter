@@ -507,6 +507,8 @@ def get_action_head(cfg: Any, llm_dim: int) -> Union[L1RegressionActionHead]:
             hidden_dim=llm_dim, 
             action_dim=ACTION_DIM,
             use_pro_version=cfg.use_pro_version,
+            action_probing=cfg.action_probing,
+            action_pooling_type=cfg.action_pooling_type
         )
 
     else:
