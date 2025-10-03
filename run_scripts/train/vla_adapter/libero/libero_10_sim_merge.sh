@@ -16,8 +16,8 @@ export PYTHONPATH=$ROOT_PATH/vla_projects/$PROJECT_PATH
 # Dataset and paths
 data_name=libero_10_no_noops
 data_root_dir=$ROOT_PATH/datasets/openvla/modified_libero_rlds
-vlm_path=$ROOT_PATH/ai_models/Stanford-ILIAD/prism-qwen25-extra-dinosiglip-224px-0_5b
-config_file_path=pretrained_models/configs
+vlm_path=$ROOT_PATH/ai_models/qwen2_5llm_dinosiglip
+config_file_path=$ROOT_PATH/ai_models/qwen2_5llm_dinosiglip
 
 # Training parameters
 batch_size=16

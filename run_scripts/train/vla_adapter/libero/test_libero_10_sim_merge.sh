@@ -23,9 +23,9 @@ config_file_path=pretrained_models/configs
 batch_size=16
 grad_accumulation_steps=1
 learning_rate=2e-4
-max_steps=100005
-num_steps_before_decay=50000
-save_freq=5000
+max_steps=105
+num_steps_before_decay=50
+save_freq=10
 
 # Model configuration
 num_images_in_input=2

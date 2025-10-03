@@ -23,10 +23,11 @@ from typing import Optional, Union
 
 import draccus
 import torch
-from transformers import AutoConfig, AutoModelForVision2Seq
+from transformers import AutoConfig, AutoImageProcessor, AutoModelForVision2Seq, AutoProcessor
 
 from prismatic.extern.hf.configuration_prismatic import OpenVLAConfig
 from prismatic.extern.hf.modeling_prismatic import OpenVLAForActionPrediction
+from prismatic.extern.hf.processing_prismatic import PrismaticImageProcessor, PrismaticProcessor
 from prismatic.models import load, load_vla
 
 
@@ -43,6 +44,8 @@ class ConvertConfig:
 def main(cfg: ConvertConfig) -> None:
     # Register OpenVLA model to HF Auto Classes
     AutoConfig.register("openvla", OpenVLAConfig)
+    AutoImageProcessor.register(OpenVLAConfig, PrismaticImageProcessor)
+    AutoProcessor.register(OpenVLAConfig, PrismaticProcessor)
     AutoModelForVision2Seq.register(OpenVLAConfig, OpenVLAForActionPrediction)
 
     vlm_path = Path(cfg.vlm_path)

@@ -101,7 +101,7 @@ def main(cfg: ConvertConfig) -> None:
 
         # Manually load action_queries weights
         try:
-            action_queries_checkpoint_path = find_checkpoint(vlm_path, "action_queries")
+            action_queries_checkpoint_path = find_checkpoint(Path(cfg.lora_finetuned_checkpoint_dir), "action_queries")
             action_queries_state_dict = torch.load(action_queries_checkpoint_path, map_location="cpu")
             RAW_STATE_DICT["action_queries.weight"] = action_queries_state_dict["weight"]
             print("Successfully loaded 'action_queries' weights.")
