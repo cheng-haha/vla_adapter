@@ -34,7 +34,7 @@ class ConvertConfig:
     base_checkpoint: Union[str, Path] = ""                   # Base model checkpoint path/dir (either openvla/openvla-7b or whichever model you fine-tuned / resumed training from)
     lora_finetuned_checkpoint_dir: Union[str, Path] = ""     # Checkpoint directory containing the LoRA adapter
     vlm_path: Union[str, Path] = "" 
-    use_minivla: bool = True                        # 
+    use_minivla: bool = False                        # 
 
 
     # fmt: on

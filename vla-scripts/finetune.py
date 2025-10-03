@@ -127,7 +127,7 @@ class FinetuneConfig:
     wandb_log_freq: int = 10                         # WandB logging frequency in steps
 
     # revision version
-    use_pro_version: bool = True                             # the version number
+    use_pro_version: bool = True                     # the version number
     phase: str = "Training"
     # fmt: on
     add_sink_token: bool = False

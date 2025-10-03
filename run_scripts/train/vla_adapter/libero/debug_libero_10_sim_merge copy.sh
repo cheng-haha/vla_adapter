@@ -25,7 +25,7 @@ grad_accumulation_steps=1
 learning_rate=2e-4
 max_steps=100005
 num_steps_before_decay=50000
-save_freq=2500
+save_freq=5000
 
 # Model configuration
 num_images_in_input=2

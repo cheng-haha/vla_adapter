@@ -25,7 +25,7 @@ grad_accumulation_steps=1
 learning_rate=2e-4
 max_steps=100005
 num_steps_before_decay=50000
-save_freq=2500
+save_freq=5000
 
 # Model configuration
 num_images_in_input=2
@@ -61,7 +61,7 @@ run_root_dir="outputs/${data_name}/${MODE}-$current_time"
 mkdir -p logs
 
 #========== Training Execution ==========#
-torchrun --standalone --nnodes 1 --nproc-per-node 4 vla-scripts/finetune.py \
+python -m debugpy --listen 1234 --wait-for-client '/root/anaconda3/envs/vla-adapter/bin/torchrun' --standalone --nnodes 1 --nproc-per-node 4 vla-scripts/finetune.py \
   --vlm_path $vlm_path \
   --config_file_path $config_file_path \
   --data_root_dir $data_root_dir \
