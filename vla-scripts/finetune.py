@@ -26,6 +26,7 @@ from torch.utils.data import DataLoader
 from transformers import AutoConfig, AutoImageProcessor, AutoModelForVision2Seq, AutoProcessor
 from transformers.modeling_outputs import CausalLMOutputWithPast
 import wandb
+from safetensors.torch import load_file
 
 from experiments.robot.openvla_utils import (
     check_model_logic_mismatch,
@@ -114,6 +115,9 @@ class FinetuneConfig:
 
     # Full Finetune
     use_fz: bool = False                             # If True, uses LoRA fine-tuning
+    merge_fine_tuning: bool = False
+    num_lora_to_merge: int = 1                       # Number of LoRA adapters to merge
+    merge_run_path: Optional[str] = None             # Path to the run directory containing checkpoints to merge
 
     # Logging
     wandb_entity: str = "your-wandb-entity"          # Name of WandB entity
@@ -129,9 +133,70 @@ class FinetuneConfig:
     add_sink_token: bool = False
     action_probing: bool = False
     action_pooling_type: str = "attention"           # Pooling type for action tokens, options: "mean", "max", "attention", "weighted"
-    merge_fine_tuning: bool = False
     only_simple_action_head: bool = False
     ensemble_hidden_state: bool = False
+
+
+def merge_lora_adapters(checkpoint_paths: list[Path]) -> dict:
+    """
+    Merges LoRA adapters by averaging their weights.
+
+    Args:
+        checkpoint_paths (list[Path]): List of paths to checkpoint directories.
+
+    Returns:
+        dict: A state dictionary with the merged LoRA adapter weights.
+    """
+    adapter_state_dicts = []
+    for chkpt_path in checkpoint_paths:
+        adapter_path = chkpt_path / "lora_adapter" / "adapter_model.safetensors"
+        if adapter_path.exists():
+            adapter_state_dicts.append(load_file(adapter_path))
+
+    if not adapter_state_dicts:
+        return {}
+
+    merged_adapter_state_dict = {}
+    keys = adapter_state_dicts[0].keys()
+    for key in keys:
+        tensors = [sd[key] for sd in adapter_state_dicts]
+        merged_tensor = torch.stack(tensors).mean(dim=0)
+        merged_adapter_state_dict[key] = merged_tensor
+
+    return merged_adapter_state_dict
+
+
+def merge_pt_checkpoints(checkpoint_paths: list[Path], module_name: str, device: str = "cpu") -> dict:
+    """
+    Merges PyTorch checkpoints for a given module by averaging their weights.
+
+    Args:
+        checkpoint_paths (list[Path]): List of paths to checkpoint directories.
+        module_name (str): Name of the module (e.g., "action_head").
+        device (str): Device to load tensors on.
+
+    Returns:
+        dict: A state dictionary with the merged module weights.
+    """
+    state_dicts = []
+    for chkpt_path in checkpoint_paths:
+        pt_files = list(chkpt_path.glob(f"{module_name}--*_checkpoint.pt"))
+        if pt_files:
+            state_dict = torch.load(pt_files[0], map_location=device)
+            state_dicts.append(remove_ddp_in_checkpoint(state_dict))
+
+    if not state_dicts:
+        return {}
+
+    merged_state_dict = {}
+    keys = state_dicts[0].keys()
+    for key in keys:
+        tensors = [sd[key].to(device) for sd in state_dicts]
+        merged_tensor = torch.stack(tensors).mean(dim=0)
+        merged_state_dict[key] = merged_tensor
+
+    return merged_state_dict
+
 
 
 def remove_ddp_in_checkpoint(state_dict) -> dict:
@@ -194,6 +259,8 @@ def get_run_id(cfg) -> str:
             run_id += "--image_aug"
         if cfg.run_id_note is not None:
             run_id += f"--{cfg.run_id_note}"
+    if cfg.merge_fine_tuning:
+        run_id += "--merged"
     return run_id
 
 
@@ -624,6 +691,101 @@ def save_training_checkpoint(
         # Wait for merged model to be saved
         dist.barrier()
 
+
+
+def merge_and_load_checkpoints_during_training(
+    cfg: FinetuneConfig,
+    run_dir: Path,
+    vla: DDP,
+    action_head: DDP,
+    proprio_projector: DDP,
+    distributed_state: PartialState,
+) -> None:
+    """
+    Merges the latest checkpoints during training and loads the merged weights back into the models.
+    This operation is performed on the main process, and the merged weights are broadcast to all other processes.
+    """
+    if not cfg.merge_fine_tuning:
+        return
+
+    # Initialize a container for merged state dicts on all processes.
+    # The main process will populate it, and then it will be broadcast.
+    merged_state_dicts = {
+        "lora_adapter": None,
+        "action_head": None,
+        "proprio_projector": None,
+    }
+
+    if distributed_state.is_main_process:
+        # Define the directory and prefix for checkpoint searching
+        parent_dir = run_dir.parent
+        # The `run_dir` is the path for the current run, e.g., `runs/config+dataset+...`
+        # Checkpoints are saved in `runs/config+dataset+...--10000_chkpt`
+        run_name_prefix = run_dir.name
+
+        # Find all checkpoint directories for the current run
+        potential_checkpoints = []
+        for p in parent_dir.iterdir():
+            if p.is_dir() and p.name.startswith(run_name_prefix) and p.name.endswith("_chkpt"):
+                try:
+                    # Extract step from directory name, e.g., '...--10000_chkpt' -> 10000
+                    step = int(p.name.split('--')[-1].replace('_chkpt', ''))
+                    potential_checkpoints.append((step, p))
+                except (ValueError, IndexError):
+                    continue
+        
+        # Sort checkpoints by step and select the most recent ones to merge
+        potential_checkpoints.sort(key=lambda x: x[0])
+        checkpoints_to_merge = [p for step, p in potential_checkpoints[-cfg.num_lora_to_merge:]]
+
+        # Proceed with merging if enough checkpoints are found
+        # We merge if we have at least 2 checkpoints, up to num_lora_to_merge
+        if len(checkpoints_to_merge) > 1:
+            print(f"Merging {len(checkpoints_to_merge)} checkpoints: {[p.name for p in checkpoints_to_merge]}")
+            
+            # Merge LoRA adapter weights
+            if cfg.use_lora:
+                merged_state_dicts["lora_adapter"] = merge_lora_adapters(checkpoints_to_merge)
+            
+            # Merge action head weights
+            if cfg.use_l1_regression and action_head is not None:
+                merged_state_dicts["action_head"] = merge_pt_checkpoints(checkpoints_to_merge, "action_head")
+            
+            # Merge proprio projector weights
+            if cfg.use_proprio and proprio_projector is not None:
+                merged_state_dicts["proprio_projector"] = merge_pt_checkpoints(checkpoints_to_merge, "proprio_projector")
+        else:
+            print("Not enough checkpoints to merge, continuing training.")
+
+
+    # Broadcast the merged state dicts from the main process to all other processes.
+    # `broadcast_object_list` requires a list, so we wrap and unwrap.
+    object_list = [merged_state_dicts]
+    dist.broadcast_object_list(object_list, src=0)
+    merged_state_dicts = object_list[0]
+
+    # Wait for all processes to receive the merged weights before loading them.
+    dist.barrier()
+
+    # Load the merged weights into the models on all processes.
+    # The models are wrapped in DDP, so we need to access the underlying module.
+    if cfg.use_lora and merged_state_dicts["lora_adapter"]:
+        vla.module.load_state_dict(merged_state_dicts["lora_adapter"], strict=False)
+        if distributed_state.is_main_process:
+            print("Successfully loaded merged LoRA adapter weights.")
+            
+    if cfg.use_l1_regression and action_head is not None and merged_state_dicts["action_head"]:
+        action_head.module.load_state_dict(merged_state_dicts["action_head"])
+        if distributed_state.is_main_process:
+            print("Successfully loaded merged action_head weights.")
+        
+    if cfg.use_proprio and proprio_projector is not None and merged_state_dicts["proprio_projector"]:
+        proprio_projector.module.load_state_dict(merged_state_dicts["proprio_projector"])
+        if distributed_state.is_main_process:
+            print("Successfully loaded merged proprio_projector weights.")
+
+    # Final barrier to ensure all models are updated before proceeding with training.
+    dist.barrier()
 
 
 def run_validation(
@@ -1129,6 +1291,16 @@ def finetune(cfg: FinetuneConfig) -> None:
                     train_dataset=train_dataset,
                     distributed_state=distributed_state,
                     new_state_dict=RAW_STATE_DICT,
+                )
+
+                # NEW: Merge and load checkpoints if enabled
+                merge_and_load_checkpoints_during_training(
+                    cfg=cfg,
+                    run_dir=run_dir,
+                    vla=vla,
+                    action_head=action_head if cfg.use_l1_regression else None,
+                    proprio_projector=proprio_projector if cfg.use_proprio else None,
+                    distributed_state=distributed_state,
                 )
 
             # Test model on validation set
