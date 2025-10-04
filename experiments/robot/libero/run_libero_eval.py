@@ -129,6 +129,8 @@ class GenerateConfig:
     phase: str = "Inference"
     action_probing: bool = False
     action_pooling_type: str = 'attention'
+    only_simple_action_head: bool = False
+    ensemble_hidden_state: bool = False
 
 
 def validate_config(cfg: GenerateConfig) -> None:

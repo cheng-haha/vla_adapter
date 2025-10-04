@@ -24,7 +24,8 @@ batch_size=16
 grad_accumulation_steps=1
 learning_rate=2e-4
 max_steps=100005
-num_steps_before_decay=50000
+lr_warmup_steps=1000
+num_steps_before_decay=75000
 save_freq=1000
 
 # Model configuration
@@ -91,7 +92,8 @@ torchrun --standalone --nnodes 1 --nproc-per-node 4 vla-scripts/finetune.py \
   --only_simple_action_head $only_simple_action_head \
   --merge_fine_tuning $merge_fine_tuning \
   --num_lora_to_merge $num_lora_to_merge \
-  --save_last_checkpoint $save_last_checkpoint
+  --save_last_checkpoint $save_last_checkpoint \
+  --lr_warmup_steps $lr_warmup_steps
 
 echo "Training started with run ID: $run_id_note"
 echo "Output directory: $run_root_dir"
