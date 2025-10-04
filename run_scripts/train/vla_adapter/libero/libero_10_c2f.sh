@@ -51,7 +51,7 @@ run_id_note="vla--$current_time"
 
 # Build MODE string with important configuration variables (excluding those already in run_id)
 # run_id already includes: config_file_path, dataset_name, batch_size*grad_accumulation_steps, learning_rate, lora_rank, image_aug
-MODE="ap_${action_probing}_img${num_images_in_input}_mini${use_minivlm}_prop${use_proprio}_pro${use_pro_version}_film${use_film}"
+MODE="c2f_${action_probing}_img${num_images_in_input}_mini${use_minivlm}_prop${use_proprio}_pro${use_pro_version}_film${use_film}"
 
 # Build run_root_dir using MODE
 run_root_dir="outputs/${data_name}/${MODE}"
