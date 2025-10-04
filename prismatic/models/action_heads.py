@@ -8,6 +8,7 @@ import math
 from typing import Tuple
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from prismatic.vla.constants import ACTION_DIM, ACTION_TOKEN_BEGIN_IDX, IGNORE_INDEX, NUM_ACTIONS_CHUNK, PROPRIO_DIM, STOP_INDEX, NUM_TOKENS
 
 
@@ -151,6 +152,38 @@ def learnable_random_perturbations(seq_len, dim, device, dtype):
 
 
 
+class RMSNorm(nn.Module):
+    def __init__(self, dim: int, eps: float = 1e-6):
+        super().__init__()
+        self.eps = eps
+        self.weight = nn.Parameter(torch.ones(dim))
+
+    def forward(self, x):
+        input_dtype = x.dtype
+        x = x.to(torch.float32)
+        variance = x.pow(2).mean(-1, keepdim=True)
+        x = x * torch.rsqrt(variance + self.eps)
+        return (self.weight * x).to(input_dtype)
+
+
+class SwiGLU(nn.Module):
+    """
+    SwiGLU activation function. See https://arxiv.org/pdf/2002.05202.pdf.
+    This is a wrapper for the F.silu function.
+    """
+
+    def __init__(self, in_features, hidden_features=None, out_features=None):
+        super().__init__()
+        out_features = out_features or in_features
+        hidden_features = hidden_features or in_features
+        self.w1 = nn.Linear(in_features, hidden_features)
+        self.w2 = nn.Linear(in_features, hidden_features)
+        self.w3 = nn.Linear(hidden_features, out_features)
+
+    def forward(self, x):
+        return self.w3(F.silu(self.w1(x)) * self.w2(x))
+
+
 class L1RegressionActionHead(nn.Module):
     """Simple MLP-based action head that generates continuous actions via L1 regression."""
     def __init__(
@@ -161,9 +194,11 @@ class L1RegressionActionHead(nn.Module):
         num_task_tokens=512,
         use_pro_version=False,
         action_probing=False,
-        action_pooling_type="mean",
+        action_pooling_type="attention",
         only_simple_action_head=False,
         ensemble_hidden_state=False,
+        sim_expert_v2=False,
+        add_sink_token=False,
     ):
         super().__init__()
         self.num_task_tokens = num_task_tokens
@@ -173,6 +208,10 @@ class L1RegressionActionHead(nn.Module):
         self.action_pooling_type = action_pooling_type
         self.only_simple_action_head = only_simple_action_head
         self.ensemble_hidden_state = ensemble_hidden_state
+        self.sim_expert_v2 = sim_expert_v2
+        self.add_sink_token = add_sink_token
+        if self.action_probing:
+            self.action_embed = nn.Linear(self.action_dim, hidden_dim)
 
         # always create the simple head components for probing or for simple head only mode
         if self.action_probing or self.only_simple_action_head:
@@ -191,6 +230,8 @@ class L1RegressionActionHead(nn.Module):
                 hidden_dim=hidden_dim,
                 output_dim=action_dim,
                 use_pro_version=use_pro_version,
+                sim_expert_v2=sim_expert_v2,
+                add_sink_token=add_sink_token,
             )
 
     def predict_action(
@@ -269,7 +310,9 @@ class MLPResNet(nn.Module):
             input_dim, 
             hidden_dim, 
             output_dim,
-            use_pro_version=False
+            use_pro_version=False,
+            sim_expert_v2=False,
+            add_sink_token=False
             ):
         
         super().__init__()
@@ -281,6 +324,8 @@ class MLPResNet(nn.Module):
         for _ in range(num_blocks):
             if use_pro_version:
                 self.mlp_resnet_blocks.append(MLPResNetBlock_Pro(dim=hidden_dim))
+            elif sim_expert_v2:
+                self.mlp_resnet_blocks.append(MLPResNetBlock_v2(dim=hidden_dim, add_sink_token=add_sink_token))
             else:
                 self.mlp_resnet_blocks.append(MLPResNetBlock(dim=hidden_dim))
                 
@@ -462,6 +507,130 @@ class MLPResNetBlock(nn.Module):
 
         return x
 
+
+
+class MLPResNetBlock_v2(nn.Module):
+    """
+    One MLP ResNet block with a single cross-attention mechanism over a combined context,
+    featuring QK normalization, Sink Token and a SwiGLU FFN. This block is designed for simplicity and elegance.
+    """
+
+    def __init__(self, dim, num_heads=8, add_sink_token: bool = False):
+        super().__init__()
+        self.dim = dim
+        self.num_heads = num_heads
+        self.head_dim = dim // num_heads
+        self.add_sink_token = add_sink_token
+
+        self.ffn = nn.Sequential(
+            nn.LayerNorm(dim),
+            SwiGLU(dim, dim, dim),
+        )
+
+        # Q (from x only)
+        self.q_proj = nn.Linear(dim, dim)
+
+        # Cross-attention K, V from combined context
+        self.k_proj = nn.Linear(dim, dim)
+        self.v_proj = nn.Linear(dim, dim)
+
+        self.o_proj = nn.Linear(dim, dim)
+
+        # RoPE
+        self.rope = RotaryPositionEmbedding(self.head_dim)
+
+        # QK Norm
+        self.q_norm = RMSNorm(self.head_dim)
+        self.k_norm = RMSNorm(self.head_dim)
+
+        if self.add_sink_token:
+            # Learnable sink token parameters, one for each attention head.
+            # These act as a "null" key/value pair that the model can attend to
+            # in order to ignore irrelevant context.
+            self.sinks = nn.Parameter(torch.empty(self.num_heads))
+
+
+    def forward(self, x, h_a=None, h_t=None, p=None):
+        """
+        Args:
+            x: input tensor (query)
+            h_a: adapter tokens (context)
+            h_t: task tokens (context)
+            p: proprioceptive conditioning vector (context)
+        """
+        B, T, C = x.shape
+
+        # === 1. Prepare combined context ===
+        context_tensors = []
+        if h_t is not None:
+            context_tensors.append(h_t)
+        if h_a is not None:
+            context_tensors.append(h_a)
+        if p is not None:
+            context_tensors.append(p)
+
+        # If no context, skip attention and just do the FFN path with residual.
+        if not context_tensors:
+            residual = x
+            x = self.ffn(residual) + residual
+            return x
+
+        context = torch.cat(context_tensors, dim=1)
+        K_ctx = context.size(1)
+
+        # === 2. Project Q, K, V ===
+        q = self.q_proj(x)
+        k = self.k_proj(context)
+        v = self.v_proj(context)
+
+        # === 3. Reshape for Multi-Head Attention ===
+        def reshape_heads(t, B, L):
+            return t.view(B, L, self.num_heads, self.head_dim).transpose(1, 2)
+
+        q = reshape_heads(q, B, T)
+        k, v = reshape_heads(k, B, K_ctx), reshape_heads(v, B, K_ctx)
+
+        # === 4. Apply RoPE ===
+        cos_q, sin_q = self.rope(seq_len=T, device=x.device, dtype=x.dtype)
+        q, _ = apply_rope(q, q, cos_q, sin_q)
+        cos_k, sin_k = self.rope(seq_len=K_ctx, device=x.device, dtype=x.dtype)
+        k, _ = apply_rope(k, k, cos_k, sin_k)
+
+        # === 5. Apply QK Norm ===
+        q = self.q_norm(q)
+        k = self.k_norm(k)
+
+        # === 6. Compute Attention ===
+        attn_scores = torch.matmul(q, k.transpose(-2, -1)) / math.sqrt(self.head_dim)
+
+        if self.add_sink_token:
+            # Expand sinks for broadcasting: (H) -> (B, H, T, 1)
+            sinks = self.sinks.reshape(1, -1, 1, 1).expand(B, -1, T, -1)
+
+            # Concatenate sink logits to attention scores
+            attn_scores = torch.cat([attn_scores, sinks], dim=-1)
+
+            # Stabilize for softmax
+            attn_scores = attn_scores - attn_scores.max(dim=-1, keepdim=True).values
+
+            # Compute probabilities over keys + sink
+            attn_probs = F.softmax(attn_scores, dim=-1, dtype=attn_scores.dtype)
+
+            # Drop the sink probability, allowing attention to "leak away" from the context
+            attn_weights = attn_probs[..., :-1]
+        else:
+            attn_weights = torch.softmax(attn_scores, dim=-1)
+
+        output = torch.matmul(attn_weights, v)
+
+        # === 7. Reshape and Final Projection ===
+        output = output.transpose(1, 2).contiguous().view(B, T, C)
+        output = self.o_proj(output)
+
+        # === 8. Residual Connection and FFN ===
+        residual = output + x
+        x = self.ffn(residual) + residual
+        return x
 
 
 class MLPResNetBlock_Pro(nn.Module):

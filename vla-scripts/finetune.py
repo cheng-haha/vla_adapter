@@ -139,6 +139,7 @@ class FinetuneConfig:
     action_pooling_type: str = "attention"           # Pooling type for action tokens, options: "mean", "max", "attention", "weighted"
     only_simple_action_head: bool = False
     ensemble_hidden_state: bool = False
+    sim_expert_v2: bool = False
 
 
 def merge_lora_adapters(checkpoint_paths: list[Path]) -> dict:
@@ -1100,6 +1101,8 @@ def finetune(cfg: FinetuneConfig) -> None:
             "action_pooling_type": cfg.action_pooling_type,
             "only_simple_action_head": cfg.only_simple_action_head,
             "ensemble_hidden_state": cfg.ensemble_hidden_state,
+            "sim_expert_v2": cfg.sim_expert_v2,
+            "add_sink_token": cfg.add_sink_token,
             },
         to_bf16=True,
         )
