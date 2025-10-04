@@ -90,7 +90,7 @@ class FinetuneConfig:
     # Training configuration
     batch_size: int = 8                              # Batch size per device (total batch size = batch_size * num GPUs)
     learning_rate: float = 5e-4                      # Learning rate
-    lr_warmup_steps: int = 0                         # Number of steps to warm up learning rate (from 10% to 100%)
+    lr_warmup_steps: int = 1000                         # Number of steps to warm up learning rate (from 10% to 100%)
     num_steps_before_decay: int = 100000             # Number of steps before LR decays by 10x
     grad_accumulation_steps: int = 1                 # Number of gradient accumulation steps
     max_steps: int = 200000                          # Max number of training steps
@@ -1112,9 +1112,9 @@ def finetune(cfg: FinetuneConfig) -> None:
     print(f"# total trainable params: {sum(p.numel() for p in trainable_params)}")
     optimizer = AdamW(  trainable_params, 
                         lr=cfg.learning_rate,
-                        # betas=(0.9, 0.95),
-                        # weight_decay=1e-8,
-                        # eps=1e-8,
+                        betas=(0.9, 0.95),
+                        weight_decay=1e-8,
+                        eps=1e-8,
                         )
 
     # Record original learning rate
@@ -1122,17 +1122,17 @@ def finetune(cfg: FinetuneConfig) -> None:
 
     # Create learning rate scheduler
     # 1. MultiStepLR
-    scheduler = MultiStepLR(
-        optimizer,
-        milestones=[cfg.num_steps_before_decay],  # Number of steps after which LR will change
-        gamma=0.1,  # Multiplicative factor of learning rate decay
-    )
+    # scheduler = MultiStepLR(
+    #     optimizer,
+    #     milestones=[cfg.num_steps_before_decay],  # Number of steps after which LR will change
+    #     gamma=0.1,  # Multiplicative factor of learning rate decay
+    # )
     # 2. CosineAnnealingLR
-    # scheduler = CosineAnnealingLR(
-    #         optimizer,
-    #         T_max=cfg.num_steps_before_decay, 
-    #         eta_min=1e-8,          
-    #         )
+    scheduler = CosineAnnealingLR(
+            optimizer,
+            T_max=cfg.num_steps_before_decay, 
+            eta_min=1e-8,          
+            )
 
     # Create Action Tokenizer
     action_tokenizer = ActionTokenizer(processor.tokenizer)

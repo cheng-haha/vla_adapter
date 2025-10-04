@@ -101,7 +101,7 @@ class SimpleActionHead(nn.Module):
     A lightweight, stackable FFN head with residual connections to generate action predictions
     from pooled action token hidden states.
     """
-    def __init__(self, hidden_dim: int, action_dim: int, num_layers: int = 2, ffn_dim_multiplier: int = 1):
+    def __init__(self, hidden_dim: int, action_dim: int, num_layers: int = 6, ffn_dim_multiplier: int = 1):
         super().__init__()
         
         self.net = nn.ModuleList()
@@ -118,7 +118,10 @@ class SimpleActionHead(nn.Module):
             nn.Linear(hidden_dim, hidden_dim),
             nn.GELU(),
         )
-        self.action_predictor = nn.Linear(hidden_dim, action_dim)
+        self.action_predictor = nn.Sequential(
+            nn.LayerNorm(hidden_dim),
+            nn.Linear(hidden_dim, action_dim)
+        )
 
     def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         """
