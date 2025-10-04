@@ -3,6 +3,10 @@
 import torch
 
 from prismatic.vla.constants import ACTION_DIM, ACTION_TOKEN_BEGIN_IDX, IGNORE_INDEX
+import torch
+import random
+import numpy as np
+import os
 
 
 def get_current_action_mask(token_ids):
@@ -56,3 +60,30 @@ def compute_actions_l1_loss(action_tokenizer, predicted_token_ids, ground_truth_
     )
     l1_loss = torch.nn.functional.l1_loss(pred_continuous_actions, true_continuous_actions)
     return l1_loss
+
+
+def set_seed(seed):
+    """
+    Set the seeds of all random number generators to ensure reproducibility
+    
+    Args:
+        seed (int): random seed
+    """
+    # Set the Python random module seed
+    random.seed(seed)
+    # set numpy seed
+    np.random.seed(seed)
+    # set torch seed
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed(seed)
+        torch.cuda.manual_seed_all(seed)
+        
+    # In order to be completely deterministic, the nondeterministic algorithm of CUDA is disabled
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+    
+    # Set the environment variable so that other Python processes can also get this seed
+    os.environ["PYTHONHASHSEED"] = str(seed)
+    
+    return seed

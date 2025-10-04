@@ -27,9 +27,10 @@ class ActionTokenPooling(nn.Module):
 
         if pooling_type == "attention":
             self.attention = nn.Sequential(
-                nn.Linear(input_dim, 128),
-                nn.ReLU(),
-                nn.Linear(128, 1),
+                nn.Linear(input_dim, 256),
+                nn.LayerNorm(256),
+                nn.GELU(),
+                nn.Linear(256, 1),
             )
         elif pooling_type == "weighted":
             # Implements an uneven pooling scheme where the first action chunk gets more tokens.
@@ -101,7 +102,7 @@ class SimpleActionHead(nn.Module):
     A lightweight, stackable FFN head with residual connections to generate action predictions
     from pooled action token hidden states.
     """
-    def __init__(self, hidden_dim: int, action_dim: int, num_layers: int = 6, ffn_dim_multiplier: int = 1):
+    def __init__(self, hidden_dim: int, action_dim: int, num_layers: int = 4, ffn_dim_multiplier: int = 1):
         super().__init__()
         
         self.net = nn.ModuleList()

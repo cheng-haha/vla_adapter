@@ -23,10 +23,9 @@ config_file_path=$ROOT_PATH/ai_models/qwen2_5llm_dinosiglip
 batch_size=16
 grad_accumulation_steps=1
 learning_rate=2e-4
-max_steps=100005
-lr_warmup_steps=1000
-num_steps_before_decay=75000
-save_freq=1000
+max_steps=150005
+num_steps_before_decay=100000
+save_freq=10000
 
 # Model configuration
 num_images_in_input=2
@@ -43,7 +42,7 @@ save_last_checkpoint=True
 use_pro_version=True
 only_simple_action_head=True
 merge_fine_tuning=True
-num_lora_to_merge=10
+num_lora_to_merge=5
 # Wandb settings
 wandb_entity=chenghaha
 wandb_project=vla_adapter
@@ -92,9 +91,8 @@ torchrun --standalone --nnodes 1 --nproc-per-node 4 vla-scripts/finetune.py \
   --only_simple_action_head $only_simple_action_head \
   --merge_fine_tuning $merge_fine_tuning \
   --num_lora_to_merge $num_lora_to_merge \
-  --save_last_checkpoint $save_last_checkpoint \
-  --lr_warmup_steps $lr_warmup_steps
-
+  --save_last_checkpoint $save_last_checkpoint 
+  
 echo "Training started with run ID: $run_id_note"
 echo "Output directory: $run_root_dir"
 echo "Log file: logs/$run_id_note.log"
