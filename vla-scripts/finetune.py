@@ -718,6 +718,7 @@ def merge_and_load_checkpoints_during_training(
         "lora_adapter": None,
         "action_head": None,
         "proprio_projector": None,
+        "action_queries": None,
     }
 
     if distributed_state.is_main_process:
@@ -758,6 +759,9 @@ def merge_and_load_checkpoints_during_training(
             # Merge proprio projector weights
             if cfg.use_proprio and proprio_projector is not None:
                 merged_state_dicts["proprio_projector"] = merge_pt_checkpoints(checkpoints_to_merge, "proprio_projector")
+
+            # Merge action queries weights
+            merged_state_dicts["action_queries"] = merge_pt_checkpoints(checkpoints_to_merge, "action_queries")
         else:
             print("Not enough checkpoints to merge, continuing training.")
 
@@ -787,6 +791,11 @@ def merge_and_load_checkpoints_during_training(
         proprio_projector.module.load_state_dict(merged_state_dicts["proprio_projector"])
         if distributed_state.is_main_process:
             print("Successfully loaded merged proprio_projector weights.")
+
+    if merged_state_dicts["action_queries"]:
+        vla.module.action_queries.load_state_dict(merged_state_dicts["action_queries"])
+        if distributed_state.is_main_process:
+            print("Successfully loaded merged action_queries weights.")
 
     # Final barrier to ensure all models are updated before proceeding with training.
     dist.barrier()
