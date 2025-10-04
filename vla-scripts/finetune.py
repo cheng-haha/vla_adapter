@@ -100,6 +100,7 @@ class FinetuneConfig:
     save_freq: int = 10_000                          # Checkpoint saving frequency in steps
     save_latest_checkpoint_only: bool = False        # If True, saves only 1 checkpoint, overwriting latest checkpoint
                                                      #   (If False, saves all checkpoints)
+    save_last_checkpoint: bool = False               # If True, saves a final checkpoint after training is complete
     resume: bool = False                             # If True, resumes from checkpoint
     resume_step: Optional[int] = None                # (When `resume==True`) Step number that we are resuming from
     image_aug: bool = True                           # If True, trains with image augmentations (HIGHLY RECOMMENDED)
@@ -963,7 +964,7 @@ def finetune(cfg: FinetuneConfig) -> None:
     AutoProcessor.register(OpenVLAConfig, PrismaticProcessor)
     processor = AutoProcessor.from_pretrained(cfg.config_file_path, trust_remote_code=True)
 
-    if cfg.use_minivlm:
+    if cfg.use_minivlm and 'prism-qwen25-extra-dinosiglip-224px-0_5b' in cfg.vlm_path:
         hf_token = ''
         if 'prism-qwen25-extra-dinosiglip-224px-0_5b' in cfg.vlm_path:
             
@@ -1329,6 +1330,28 @@ def finetune(cfg: FinetuneConfig) -> None:
             if log_step == cfg.max_steps:
                 print(f"Max step {cfg.max_steps} reached! Stopping training...")
                 break
+
+    # Save a final checkpoint if specified
+    if cfg.save_last_checkpoint and cfg.max_steps % cfg.save_freq != 0:
+        print("Training complete, saving final checkpoint.")
+        save_training_checkpoint(
+            cfg=cfg,
+            run_dir=run_dir,
+            log_step=log_step,
+            vla=vla,
+            processor=processor,
+            proprio_projector=proprio_projector if cfg.use_proprio else None,
+            noisy_action_projector=None,
+            action_head=action_head,
+            train_dataset=train_dataset,
+            distributed_state=distributed_state,
+            new_state_dict=RAW_STATE_DICT,
+        )
+
+    # Teardown
+    # overwatch.teardown() # This line was removed as per the edit hint.
+    if distributed_state.is_main_process:
+        wandb.finish()
 
 
 if __name__ == "__main__":

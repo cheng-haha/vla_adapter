@@ -25,7 +25,7 @@ grad_accumulation_steps=1
 learning_rate=2e-4
 max_steps=100005
 num_steps_before_decay=50000
-save_freq=2500
+save_freq=1000
 
 # Model configuration
 num_images_in_input=2
@@ -38,6 +38,7 @@ use_minivlm=True
 image_aug=True
 save_latest_checkpoint_only=False
 merge_lora_during_training=False
+save_last_checkpoint=True
 use_pro_version=True
 only_simple_action_head=True
 merge_fine_tuning=True
@@ -89,7 +90,8 @@ torchrun --standalone --nnodes 1 --nproc-per-node 4 vla-scripts/finetune.py \
   --run_id_note $run_id_note \
   --only_simple_action_head $only_simple_action_head \
   --merge_fine_tuning $merge_fine_tuning \
-  --num_lora_to_merge $num_lora_to_merge
+  --num_lora_to_merge $num_lora_to_merge \
+  --save_last_checkpoint $save_last_checkpoint
 
 echo "Training started with run ID: $run_id_note"
 echo "Output directory: $run_root_dir"
