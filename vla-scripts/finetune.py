@@ -21,12 +21,13 @@ from huggingface_hub import HfApi, snapshot_download
 from peft import LoraConfig, PeftModel, get_peft_model
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.optim import AdamW
-from torch.optim.lr_scheduler import MultiStepLR, CosineAnnealingLR, ExponentialLR
+from torch.optim.lr_scheduler import LambdaLR
 from torch.utils.data import DataLoader
 from transformers import AutoConfig, AutoImageProcessor, AutoModelForVision2Seq, AutoProcessor
 from transformers.modeling_outputs import CausalLMOutputWithPast
 import wandb
 from safetensors.torch import load_file
+import math
 
 from experiments.robot.openvla_utils import (
     check_model_logic_mismatch,
@@ -63,6 +64,29 @@ from prismatic.models import load, load_vla
 
 # Sane Defaults
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
+
+
+def get_warmup_stable_cosine_schedule(
+    optimizer: AdamW, num_warmup_steps: int, num_stable_steps: int, num_decay_steps: int, last_epoch: int = -1
+):
+    """
+    Create a schedule with a learning rate that follows a warmup, stable, and cosine decay curve.
+    1. Linearly warms up from 0 to the initial LR over `num_warmup_steps`.
+    2. Stays constant at the initial LR for `num_stable_steps`.
+    3. Decays following a cosine curve from the initial LR to 0 over `num_decay_steps`.
+    """
+
+    def lr_lambda(current_step):
+        if current_step < num_warmup_steps:
+            return float(current_step) / float(max(1, num_warmup_steps))
+        elif current_step < num_warmup_steps + num_stable_steps:
+            return 1.0
+        else:
+            progress = float(current_step - num_warmup_steps - num_stable_steps) / float(max(1, num_decay_steps))
+            return 0.5 * (1.0 + math.cos(math.pi * progress))
+
+    return LambdaLR(optimizer, lr_lambda, last_epoch)
+
 
 @dataclass
 class FinetuneConfig:
@@ -1121,18 +1145,18 @@ def finetune(cfg: FinetuneConfig) -> None:
     original_lr = optimizer.param_groups[0]["lr"]
 
     # Create learning rate scheduler
-    # 1. MultiStepLR
-    # scheduler = MultiStepLR(
-    #     optimizer,
-    #     milestones=[cfg.num_steps_before_decay],  # Number of steps after which LR will change
-    #     gamma=0.1,  # Multiplicative factor of learning rate decay
-    # )
-    # 2. CosineAnnealingLR
-    scheduler = CosineAnnealingLR(
-            optimizer,
-            T_max=cfg.num_steps_before_decay, 
-            eta_min=1e-8,          
-            )
+    # Implements a warmup-stable-cosine learning rate schedule
+    num_stable_steps = cfg.num_steps_before_decay - cfg.lr_warmup_steps
+    assert num_stable_steps >= 0, "num_steps_before_decay must be >= lr_warmup_steps"
+    num_decay_steps = cfg.max_steps - cfg.num_steps_before_decay
+    assert num_decay_steps >= 0, "max_steps must be >= num_steps_before_decay"
+
+    scheduler = get_warmup_stable_cosine_schedule(
+        optimizer,
+        num_warmup_steps=cfg.lr_warmup_steps,
+        num_stable_steps=num_stable_steps,
+        num_decay_steps=num_decay_steps,
+    )
 
     # Create Action Tokenizer
     action_tokenizer = ActionTokenizer(processor.tokenizer)
@@ -1266,25 +1290,19 @@ def finetune(cfg: FinetuneConfig) -> None:
                 log_metrics_to_wandb(smoothened_metrics, "VLA Train", log_step, wandb)
 
             # [If applicable] Linearly warm up learning rate from 10% to 100% of original
-            if cfg.lr_warmup_steps > 0:
-                lr_progress = min((gradient_step_idx + 1) / cfg.lr_warmup_steps, 1.0)  # Cap at 1.0
-                current_lr = original_lr * (0.1 + 0.9 * lr_progress)
-                for param_group in optimizer.param_groups:
-                    param_group["lr"] = current_lr
-
-            if distributed_state.is_main_process and gradient_step_idx % cfg.wandb_log_freq == 0:
+            if (batch_idx + 1) % cfg.grad_accumulation_steps == 0:
                 # Log the learning rate
                 # Make sure to do this AFTER any learning rate modifications (e.g., warmup/decay)
-                wandb.log(
-                    {
-                        "VLA Train/Learning Rate": scheduler.get_last_lr()[0],
-                    },
-                    step=log_step,
-                )
-                print(f"Step {log_step} - Learning Rate: {scheduler.get_last_lr()[0]:.10e}")
+                if distributed_state.is_main_process and gradient_step_idx % cfg.wandb_log_freq == 0:
+                    wandb.log(
+                        {
+                            "VLA Train/Learning Rate": scheduler.get_last_lr()[0],
+                        },
+                        step=log_step,
+                    )
+                    print(f"Step {log_step} - Learning Rate: {scheduler.get_last_lr()[0]:.10e}")
 
-            # Optimizer and LR scheduler step
-            if (batch_idx + 1) % cfg.grad_accumulation_steps == 0:
+                # Optimizer and LR scheduler step
                 optimizer.step()
                 scheduler.step()
                 optimizer.zero_grad()
