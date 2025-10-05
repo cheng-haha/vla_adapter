@@ -88,6 +88,7 @@ class FinetuneConfig:
     use_film: bool = False                           # If True, uses FiLM to infuse language inputs into visual features
     num_images_in_input: int = 1                     # Number of images in the VLA input (default: 1)
     use_proprio: bool = False                        # If True, includes robot proprioceptive state in input
+    proprio_as_queries: bool = False                 # If True, initializes proprioceptive state with action queries.
     phase1_path: str = "None"
 
     # Training configuration
@@ -419,6 +420,7 @@ def run_forward_pass(
             output_hidden_states=True,
             proprio=batch["proprio"] if use_proprio else None,
             proprio_projector=proprio_projector if use_proprio else None,
+            proprio_as_queries=cfg.proprio_as_queries if use_proprio else False,
             noisy_actions=None,
             noisy_action_projector=None,
             diffusion_timestep_embeddings=None,
