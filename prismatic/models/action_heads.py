@@ -210,8 +210,6 @@ class L1RegressionActionHead(nn.Module):
         self.ensemble_hidden_state = ensemble_hidden_state
         self.sim_expert_v2 = sim_expert_v2
         self.add_sink_token = add_sink_token
-        if self.action_probing:
-            self.action_embed = nn.Linear(self.action_dim, hidden_dim)
 
         # always create the simple head components for probing or for simple head only mode
         if self.action_probing or self.only_simple_action_head:
@@ -322,10 +320,10 @@ class MLPResNet(nn.Module):
         self.mlp_resnet_blocks = nn.ModuleList()
 
         for _ in range(num_blocks):
-            if use_pro_version:
-                self.mlp_resnet_blocks.append(MLPResNetBlock_Pro(dim=hidden_dim))
-            elif sim_expert_v2:
+            if sim_expert_v2:
                 self.mlp_resnet_blocks.append(MLPResNetBlock_v2(dim=hidden_dim, add_sink_token=add_sink_token))
+            elif use_pro_version and not sim_expert_v2:
+                self.mlp_resnet_blocks.append(MLPResNetBlock_Pro(dim=hidden_dim))
             else:
                 self.mlp_resnet_blocks.append(MLPResNetBlock(dim=hidden_dim))
                 
