@@ -537,6 +537,7 @@ class PrismaticForConditionalGeneration(PrismaticPreTrainedModel):
         return_dict: Optional[bool] = None,
         proprio=None,
         proprio_projector=None,
+        proprio_as_queries: bool = False,
         noisy_actions=None,
         noisy_action_projector=None,
         diffusion_timestep_embeddings=None,
@@ -615,22 +616,14 @@ class PrismaticForConditionalGeneration(PrismaticPreTrainedModel):
             projected_patch_embeddings = self._process_vision_features(pixel_values, language_embeddings, use_film)
 
             # Process action embeddings
-            if noisy_actions is not None:
-                
-
-                action_queries = self.action_queries.weight  # (1, h)
-                action_queries = action_queries.view(1, action_queries.shape[0], action_queries.shape[1]).repeat(input_embeddings.shape[0], 1, 1)  # (b, chunk_size, h)
-                all_actions_mask = self._process_action_masks(labels)
-                input_embeddings = self._replace_input_embeddings(
-                    input_embeddings, all_actions_mask, action_queries)
-                
-
+            if proprio_as_queries:
+                action_queries = proprio_projector(proprio) # (b,1,h)
+                action_queries = action_queries.unsqueeze(1).repeat(1, NUM_TOKENS , 1) # (b, chunk_size, h)
             else:
-                action_queries = self.action_queries.weight  # (1, h)
-                action_queries = action_queries.view(1, action_queries.shape[0], action_queries.shape[1]).repeat(input_embeddings.shape[0], 1, 1)  # (b, chunk_size, h)
-                all_actions_mask = self._process_action_masks(labels)
-                input_embeddings = self._replace_input_embeddings(
-                    input_embeddings, all_actions_mask, action_queries)
+                action_queries = self.action_queries.weight # (1,h)
+                action_queries = action_queries.view(1, action_queries.shape[0], action_queries.shape[1]).repeat(input_embeddings.shape[0], 1, 1) # (b, chunk_size, h)
+            all_actions_mask = self._process_action_masks(labels)
+            input_embeddings = self._replace_input_embeddings(input_embeddings, all_actions_mask, action_queries)
 
             # Build multimodal embeddings & attention mask
             multimodal_embeddings, multimodal_attention_mask = self._build_multimodal_attention(
@@ -817,11 +810,17 @@ class OpenVLAForActionPrediction(PrismaticForConditionalGeneration):
         action_head=None,
         proprio=None,
         proprio_projector=None,
+        proprio_as_queries=False,
     ):
         """Run L1 regression-based continuous action prediction or discrete action tokens prediction."""
 
-        action_queries = self.action_queries.weight  # (1, h)
+        if proprio_as_queries:
+            action_queries = proprio_projector(proprio) # (b,1,h)
+        else:
+            action_queries = self.action_queries.weight # (b,1,h)
+        
         action_queries = action_queries.view(1, action_queries.shape[0], action_queries.shape[1]).repeat(input_embeddings.shape[0], 1, 1)  # (b, chunk_size, h)
+        
         # Replace action token embeddings with noisy action embeddings
         input_embeddings = self._replace_input_embeddings(input_embeddings.clone(), all_actions_mask, action_queries)
 
@@ -898,6 +897,7 @@ class OpenVLAForActionPrediction(PrismaticForConditionalGeneration):
         action_head=None,
         noisy_action_projector=None,
         use_film: bool = False,
+        proprio_as_queries: bool = False,
         **kwargs: str,
     ) -> np.ndarray:
         """Predict actions from input sequence, with options for different prediction methods.
@@ -910,6 +910,7 @@ class OpenVLAForActionPrediction(PrismaticForConditionalGeneration):
             action_head: Optional head for L1 regression or diffusion-based prediction
             noisy_action_projector: Projector for noisy actions in diffusion-based prediction
             use_film: Whether to use FiLM conditioning
+            proprio_as_queries: Whether to use proprioceptive features as queries for the language model
             **kwargs: Additional arguments including pixel_values and attention_mask
 
         Returns:
@@ -964,6 +965,7 @@ class OpenVLAForActionPrediction(PrismaticForConditionalGeneration):
             action_head=action_head,
             proprio=proprio, # [8]
             proprio_projector=proprio_projector,
+            proprio_as_queries=proprio_as_queries,
             )
            
         # Unnormalize predicted actions

@@ -618,10 +618,10 @@ class PrismaticForConditionalGeneration(PrismaticPreTrainedModel):
             # Process action embeddings
             if proprio_as_queries:
                 action_queries = proprio_projector(proprio) # (b,1,h)
+                action_queries = action_queries.unsqueeze(1).repeat(1, NUM_TOKENS , 1) # (b, chunk_size, h)
             else:
-                action_queries = self.action_queries.weight # (b,1,h)
-            
-            action_queries = action_queries.view(1, action_queries.shape[0], action_queries.shape[1]).repeat(input_embeddings.shape[0], 1, 1) # (b, chunk_size, h)
+                action_queries = self.action_queries.weight # (1,h)
+                action_queries = action_queries.view(1, action_queries.shape[0], action_queries.shape[1]).repeat(input_embeddings.shape[0], 1, 1) # (b, chunk_size, h)
             all_actions_mask = self._process_action_masks(labels)
             input_embeddings = self._replace_input_embeddings(input_embeddings, all_actions_mask, action_queries)
 
