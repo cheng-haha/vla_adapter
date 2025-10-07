@@ -24,7 +24,7 @@ batch_size=16
 grad_accumulation_steps=1
 learning_rate=2e-4
 max_steps=150005
-num_steps_before_decay=100000
+num_steps_before_decay=150005
 save_freq=10000
 
 # Model configuration
