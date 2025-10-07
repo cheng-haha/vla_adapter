@@ -617,8 +617,10 @@ class PrismaticForConditionalGeneration(PrismaticPreTrainedModel):
 
             # Process action embeddings
             if proprio_as_queries:
-                action_queries = proprio_projector(proprio) # (b,h)
-                action_queries = action_queries.unsqueeze(1).repeat(1, NUM_TOKENS , 1) # (b, num tokens, h)
+                prop_action_queries = proprio_projector(proprio) # (b,h)
+                learnable_queries   = self.action_queries.weight # (1,h)
+                learnable_queries   = learnable_queries.view(1, learnable_queries.shape[0], learnable_queries.shape[1]).repeat(input_embeddings.shape[0], 1, 1)
+                action_queries      = prop_action_queries.unsqueeze(1).repeat(1, NUM_TOKENS , 1) + learnable_queries # (b, num tokens, h) 
             else:
                 action_queries = self.action_queries.weight # (1,h)
                 action_queries = action_queries.view(1, action_queries.shape[0], action_queries.shape[1]).repeat(input_embeddings.shape[0], 1, 1) # (b, chunk_size, h)
@@ -816,8 +818,9 @@ class OpenVLAForActionPrediction(PrismaticForConditionalGeneration):
 
         # Process action embeddings
         if proprio_as_queries:
-            action_queries = proprio_projector(proprio) # (b,h)
-            action_queries = action_queries.unsqueeze(0).unsqueeze(0).repeat(1, NUM_TOKENS , 1) # (b, num tokens, h)
+            prop_action_queries = proprio_projector(proprio) # (b,h)
+            learnable_queries   = self.action_queries.weight.view(1, action_queries.shape[0], action_queries.shape[1]).repeat(input_embeddings.shape[0], 1, 1)
+            action_queries      = prop_action_queries.unsqueeze(0).unsqueeze(0).repeat(1, NUM_TOKENS , 1) + learnable_queries # (b, num tokens, h) 
         else:
             action_queries = self.action_queries.weight # (1,h)
             action_queries = action_queries.view(1, action_queries.shape[0], action_queries.shape[1]).repeat(input_embeddings.shape[0], 1, 1) # (b, chunk_size, h)
