@@ -141,6 +141,15 @@ class FinetuneConfig:
     only_simple_action_head: bool = False
     ensemble_hidden_state: bool = False
     sim_expert_v2: bool = False
+    
+    # Perturbations
+    perturbation_type: str = "learnable_gaussian"         # Type of perturbation to apply during training. Options: "none", "learnable_gaussian", "random_gaussian", "dropout", "adversarial", "condition_aware", "feature_mixup", "token_dropout"
+    perturbation_std: float = 0.02                     # Std dev for random_gaussian perturbation
+    perturbation_dropout_p: float = 0.1                # Dropout probability for dropout perturbation
+    adversarial_step_size: float = 1e-3                # Step size for adversarial perturbation
+    condition_aware_scale: float = 0.01                # Scale for condition-aware perturbation
+    mixup_alpha: float = 0.4                           # Alpha parameter for the Beta distribution in Feature Mixup
+    token_dropout_p: float = 0.1                       # Probability of dropping a token in Token-level Dropout
 
 
 def merge_lora_adapters(checkpoint_paths: list[Path]) -> dict:
@@ -488,16 +497,17 @@ def run_forward_pass(
             multi_layer_hidden_states.append(all_hidden_states)
         multi_layer_hidden_states = torch.cat(multi_layer_hidden_states, dim = 1)
 
-        predicted_actions, coarse_actions = action_head.module.predict_action(
+        predicted_actions, coarse_actions, ground_truth_actions_for_loss = action_head.module.predict_action(
             multi_layer_hidden_states,
             proprio=batch["proprio"] if use_proprio else None,
             proprio_projector=proprio_projector if use_proprio else None,
             phase=cfg.phase,
+            ground_truth_actions=ground_truth_actions,
             )
 
-        main_loss = torch.nn.L1Loss()(predicted_actions, ground_truth_actions)
+        main_loss = torch.nn.L1Loss()(predicted_actions, ground_truth_actions_for_loss)
         if cfg.action_probing and coarse_actions is not None:
-            coarse_loss = torch.nn.L1Loss()(coarse_actions, ground_truth_actions)
+            coarse_loss = torch.nn.L1Loss()(coarse_actions, ground_truth_actions_for_loss)
             loss = main_loss + coarse_loss
             metrics["coarse_action_l1_loss"] = coarse_loss.item()
         else:
@@ -512,9 +522,9 @@ def run_forward_pass(
         # Get detailed L1 losses for logging
         should_log_l1_loss = use_l1_regression
         if should_log_l1_loss:
-            ground_truth_curr_action = ground_truth_actions[:, 0]
+            ground_truth_curr_action = ground_truth_actions_for_loss[:, 0]
             predicted_curr_action = predicted_actions[:, 0]
-            ground_truth_next_actions = ground_truth_actions[:, 1:]
+            ground_truth_next_actions = ground_truth_actions_for_loss[:, 1:]
             predicted_next_actions = predicted_actions[:, 1:]
             curr_action_l1_loss = torch.nn.L1Loss()(ground_truth_curr_action, predicted_curr_action)
             next_actions_l1_loss = torch.nn.L1Loss()(ground_truth_next_actions, predicted_next_actions)
@@ -843,6 +853,8 @@ def run_validation(
     """
     val_start_time = time.time()
     vla.eval()
+    if action_head is not None:
+        action_head.eval()
     val_batches_count = 0
 
     # List to store validation metrics
@@ -1105,6 +1117,13 @@ def finetune(cfg: FinetuneConfig) -> None:
             "ensemble_hidden_state": cfg.ensemble_hidden_state,
             "sim_expert_v2": cfg.sim_expert_v2,
             "add_sink_token": cfg.add_sink_token,
+            "perturbation_type": cfg.perturbation_type,
+            "perturbation_std": cfg.perturbation_std,
+            "perturbation_dropout_p": cfg.perturbation_dropout_p,
+            "adversarial_step_size": cfg.adversarial_step_size,
+            "condition_aware_scale": cfg.condition_aware_scale,
+            "mixup_alpha": cfg.mixup_alpha,
+            "token_dropout_p": cfg.token_dropout_p,
             },
         to_bf16=True,
         )
@@ -1340,6 +1359,8 @@ def finetune(cfg: FinetuneConfig) -> None:
                 )
                 # Set model back to training mode after validation
                 vla.train()
+                if action_head is not None:
+                    action_head.train()
 
             # Stop training when max_steps is reached
             if log_step == cfg.max_steps:

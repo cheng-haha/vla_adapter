@@ -5,10 +5,11 @@ Implementations of various action heads, which serve as alternatives to VLM sequ
 """
 
 import math
-from typing import Tuple
+from typing import Tuple, Optional
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch.distributions import Beta
 from prismatic.vla.constants import ACTION_DIM, ACTION_TOKEN_BEGIN_IDX, IGNORE_INDEX, NUM_ACTIONS_CHUNK, PROPRIO_DIM, STOP_INDEX, NUM_TOKENS
 
 
@@ -145,13 +146,6 @@ class SimpleActionHead(nn.Module):
         return coarse_action, representation
 
 
-def learnable_random_perturbations(seq_len, dim, device, dtype):
-    random_perturbations = nn.Parameter(torch.zeros(seq_len, dim, device=device, dtype=dtype))
-    nn.init.normal_(random_perturbations, mean=0.0, std=0.02)
-    return random_perturbations
-
-
-
 class RMSNorm(nn.Module):
     def __init__(self, dim: int, eps: float = 1e-6):
         super().__init__()
@@ -199,6 +193,13 @@ class L1RegressionActionHead(nn.Module):
         ensemble_hidden_state=False,
         sim_expert_v2=False,
         add_sink_token=False,
+        perturbation_type: str = "learnable_gaussian",
+        perturbation_std: float = 0.02,
+        perturbation_dropout_p: float = 0.1,
+        adversarial_step_size: float = 1e-3,
+        condition_aware_scale: float = 0.01,
+        mixup_alpha: float = 0.4,
+        token_dropout_p: float = 0.1,
     ):
         super().__init__()
         self.num_task_tokens = num_task_tokens
@@ -210,6 +211,12 @@ class L1RegressionActionHead(nn.Module):
         self.ensemble_hidden_state = ensemble_hidden_state
         self.sim_expert_v2 = sim_expert_v2
         self.add_sink_token = add_sink_token
+        self.perturbation_type = perturbation_type
+        self.perturbation_std = perturbation_std
+        self.adversarial_step_size = adversarial_step_size
+        self.condition_aware_scale = condition_aware_scale
+        self.mixup_alpha = mixup_alpha
+        self.token_dropout_p = token_dropout_p
 
         # always create the simple head components for probing or for simple head only mode
         if self.action_probing or self.only_simple_action_head:
@@ -222,9 +229,22 @@ class L1RegressionActionHead(nn.Module):
             self.coarse_action_head = SimpleActionHead(hidden_dim, self.action_dim)
 
         if not self.only_simple_action_head:
+            pert_dim = hidden_dim if self.action_probing else self.action_dim * hidden_dim
+            if self.perturbation_type == "learnable_gaussian":
+                self.perturbations = nn.Parameter(torch.zeros(NUM_ACTIONS_CHUNK, pert_dim))
+                nn.init.normal_(self.perturbations, mean=0.0, std=self.perturbation_std)
+            elif self.perturbation_type == "dropout":
+                self.dropout = nn.Dropout(p=perturbation_dropout_p)
+            elif self.perturbation_type == "condition_aware":
+                self.noise_generator = nn.Sequential(
+                    nn.Linear(hidden_dim, hidden_dim * 2),
+                    nn.ReLU(),
+                    nn.Linear(hidden_dim * 2, pert_dim),
+                )
+
             self.model = MLPResNet(
                 num_blocks=24,
-                input_dim=action_dim * input_dim if not self.action_probing else hidden_dim,
+                input_dim=self.action_dim * input_dim if not self.action_probing else hidden_dim,
                 hidden_dim=hidden_dim,
                 output_dim=action_dim,
                 use_pro_version=use_pro_version,
@@ -232,13 +252,86 @@ class L1RegressionActionHead(nn.Module):
                 add_sink_token=add_sink_token,
             )
 
+    def _apply_perturbations(self, x: torch.Tensor, ground_truth_actions: Optional[torch.Tensor] = None, proprio: Optional[torch.Tensor] = None, proprio_projector: Optional[nn.Module] = None) -> torch.Tensor:
+        """
+        Applies a configured perturbation to the input tensor as a regularization technique.
+
+        Args:
+            x (torch.Tensor): The input tensor to be perturbed.
+            ground_truth_actions (Optional[torch.Tensor]): Ground truth actions, required for adversarial perturbations.
+            proprio (Optional[torch.Tensor]): Proprioceptive state, required for condition-aware perturbations.
+            proprio_projector (Optional[nn.Module]): Proprioceptive projector, required for condition-aware perturbations.
+
+        Returns:
+            torch.Tensor: The perturbed tensor.
+        """
+        if not self.training or self.perturbation_type == "none":
+            return x
+
+        if self.perturbation_type == "learnable_gaussian":
+            return x + self.perturbations
+        elif self.perturbation_type == "random_gaussian":
+            noise = torch.randn_like(x) * self.perturbation_std
+            return x + noise
+        elif self.perturbation_type == "dropout":
+            return self.dropout(x)
+        elif self.perturbation_type == "adversarial":
+            if ground_truth_actions is None:
+                # Cannot compute adversarial perturbation without ground truth, so we return the input as is.
+                return x
+
+            # FGSM-like single-step adversarial perturbation
+            x_adv = x.clone().detach().requires_grad_(True)
+            
+            # A single forward and backward pass is needed to get the gradient w.r.t. the input.
+            with torch.enable_grad():
+                # We only need the prediction from the model to compute the loss.
+                # The full context (h_a, p, h_t) is not necessary for this simplified adversarial step.
+                predicted_actions, _ = self.model(x_adv, h_a=None, p=None, h_t=None)
+                loss = F.l1_loss(predicted_actions, ground_truth_actions)
+
+            # Compute gradients with respect to the input
+            loss.backward()
+            
+            # Add the perturbation
+            perturbation = self.adversarial_step_size * x_adv.grad.sign()
+            return x + perturbation
+        elif self.perturbation_type == "condition_aware":
+            if proprio is None or proprio_projector is None:
+                return x
+            
+            # Project proprioceptive state
+            batch_size = x.shape[0]
+            proprio = proprio.reshape(batch_size, -1).to(x.dtype)
+            proprio_features = proprio_projector(proprio)  # (B, D_llm)
+
+            # Generate and scale noise
+            noise = self.noise_generator(proprio_features)  # (B, D_pert)
+            # Reshape noise to match input shape for broadcasting
+            noise = noise.unsqueeze(1).expand_as(x) # (B, NUM_ACTIONS_CHUNK, D_pert)
+            return x + noise * self.condition_aware_scale
+        elif self.perturbation_type == "token_dropout":
+            if not self.training or self.token_dropout_p == 0:
+                return x
+
+            B, N, D = x.shape
+            keep_prob = 1 - self.token_dropout_p
+            
+            # Create a mask for tokens to keep of shape (B, N, 1) and apply it.
+            mask = torch.bernoulli(torch.full((B, N, 1), keep_prob, device=x.device, dtype=x.dtype))
+            
+            # Scale the output to maintain the same expected sum.
+            return x * mask / keep_prob
+        return x
+
     def predict_action(
             self, 
             actions_hidden_states, 
             proprio=None, 
             proprio_projector=None,
-            phase="Inference"
-            ) -> Tuple[torch.Tensor, torch.Tensor | None]:
+            phase="Inference",
+            ground_truth_actions: Optional[torch.Tensor] = None,
+            ) -> Tuple[torch.Tensor, torch.Tensor | None, torch.Tensor]:
         batch_size = actions_hidden_states.shape[0]
         device = actions_hidden_states.device
 
@@ -262,7 +355,7 @@ class L1RegressionActionHead(nn.Module):
 
             # Get action prediction
             action, _ = self.coarse_action_head(pooled_actions_hidden)
-            return action, None
+            return action, None, ground_truth_actions
 
         if self.action_probing:
             # Use the last layer's action hidden states
@@ -286,18 +379,26 @@ class L1RegressionActionHead(nn.Module):
                 batch_size, NUM_ACTIONS_CHUNK, -1
             )  # (batch, chunk_len, action_dim * hidden_dim)
 
-        if phase == "Training":
-            batch_size, seq_len, dim = rearranged_actions_hidden_states.shape
-            random_perturbations = learnable_random_perturbations(
-                seq_len, dim, device=rearranged_actions_hidden_states.device, dtype=rearranged_actions_hidden_states.dtype
-            )
-            rearranged_actions_hidden_states = rearranged_actions_hidden_states + random_perturbations  # (1, seq_len, dim)
-            # print("-----------------")
+        if self.training:
+            rearranged_actions_hidden_states = self._apply_perturbations(rearranged_actions_hidden_states, ground_truth_actions, proprio, proprio_projector)
+
+            if self.perturbation_type == "feature_mixup":
+                # Beta distribution for mixing coefficient
+                m = Beta(torch.tensor([self.mixup_alpha]), torch.tensor([self.mixup_alpha]))
+                lam = m.sample().to(device)
+
+                # Shuffle batch
+                idx = torch.randperm(batch_size)
+                
+                # Mix features and ground truth actions
+                rearranged_actions_hidden_states = lam * rearranged_actions_hidden_states + (1 - lam) * rearranged_actions_hidden_states[idx]
+                ground_truth_actions_for_loss = lam * ground_truth_actions + (1 - lam) * ground_truth_actions[idx]
+
 
         action = self.model(rearranged_actions_hidden_states, h_a=actions_hidden_states, p=proprio_features, h_t=task_hidden_states)
 
         coarse_action_to_return = coarse_action if self.action_probing else None
-        return action, coarse_action_to_return
+        return action, coarse_action_to_return, ground_truth_actions_for_loss
     
 
 class MLPResNet(nn.Module):

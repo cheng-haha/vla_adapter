@@ -1,0 +1,3 @@
+bash run_scripts/train/vla_adapter/libero_robust/libero_10_sim_learn_gassin.sh
+bash run_scripts/train/vla_adapter/libero_robust/libero_10_sim_condition_aware.sh
+bash run_scripts/train/vla_adapter/libero_robust/libero_10_sim_random.sh
