@@ -617,11 +617,13 @@ class PrismaticForConditionalGeneration(PrismaticPreTrainedModel):
 
             # Process action embeddings
             if proprio_as_queries:
-                action_queries = proprio_projector(proprio) # (b,1,h)
+                prop_action_queries = proprio_projector(proprio) # (b,h)
+                learnable_queries   = self.action_queries.weight # (1,h)
+                learnable_queries   = learnable_queries.view(1, learnable_queries.shape[0], learnable_queries.shape[1]).repeat(input_embeddings.shape[0], 1, 1)
+                action_queries      = prop_action_queries.unsqueeze(1).repeat(1, NUM_TOKENS , 1) + learnable_queries # (b, num tokens, h) 
             else:
-                action_queries = self.action_queries.weight # (b,1,h)
-            
-            action_queries = action_queries.view(1, action_queries.shape[0], action_queries.shape[1]).repeat(input_embeddings.shape[0], 1, 1) # (b, chunk_size, h)
+                action_queries = self.action_queries.weight # (1,h)
+                action_queries = action_queries.view(1, action_queries.shape[0], action_queries.shape[1]).repeat(input_embeddings.shape[0], 1, 1) # (b, chunk_size, h)
             all_actions_mask = self._process_action_masks(labels)
             input_embeddings = self._replace_input_embeddings(input_embeddings, all_actions_mask, action_queries)
 
@@ -814,12 +816,14 @@ class OpenVLAForActionPrediction(PrismaticForConditionalGeneration):
     ):
         """Run L1 regression-based continuous action prediction or discrete action tokens prediction."""
 
+        # Process action embeddings
         if proprio_as_queries:
-            action_queries = proprio_projector(proprio) # (b,1,h)
+            prop_action_queries = proprio_projector(proprio) # (b,h)
+            learnable_queries   = self.action_queries.weight.view(1, action_queries.shape[0], action_queries.shape[1]).repeat(input_embeddings.shape[0], 1, 1)
+            action_queries      = prop_action_queries.unsqueeze(0).unsqueeze(0).repeat(1, NUM_TOKENS , 1) + learnable_queries # (b, num tokens, h) 
         else:
-            action_queries = self.action_queries.weight # (b,1,h)
-        
-        action_queries = action_queries.view(1, action_queries.shape[0], action_queries.shape[1]).repeat(input_embeddings.shape[0], 1, 1)  # (b, chunk_size, h)
+            action_queries = self.action_queries.weight # (1,h)
+            action_queries = action_queries.view(1, action_queries.shape[0], action_queries.shape[1]).repeat(input_embeddings.shape[0], 1, 1) # (b, chunk_size, h)
         
         # Replace action token embeddings with noisy action embeddings
         input_embeddings = self._replace_input_embeddings(input_embeddings.clone(), all_actions_mask, action_queries)

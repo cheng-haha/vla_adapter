@@ -16,15 +16,15 @@ export PYTHONPATH=$ROOT_PATH/vla_projects/$PROJECT_PATH
 # Dataset and paths
 data_name=libero_10_no_noops
 data_root_dir=$ROOT_PATH/datasets/openvla/modified_libero_rlds
-vlm_path=$ROOT_PATH/ai_models/qwen2_5llm_dinosiglip
-config_file_path=$ROOT_PATH/ai_models/qwen2_5llm_dinosiglip
+vlm_path=$ROOT_PATH/ai_models/Stanford-ILIAD/prism-qwen25-extra-dinosiglip-224px-0_5b
+config_file_path=pretrained_models/configs
 
 # Training parameters
 batch_size=16
 grad_accumulation_steps=1
 learning_rate=2e-4
-max_steps=150005
-num_steps_before_decay=100000
+max_steps=60005
+num_steps_before_decay=30000
 save_freq=10000
 
 # Model configuration
@@ -37,10 +37,10 @@ use_fz=False
 use_minivlm=True
 image_aug=True
 save_latest_checkpoint_only=False
-merge_lora_during_training=True
+merge_lora_during_training=False
 use_pro_version=True
 action_probing=True
-add_sink_token=True
+add_sink_token=False
 sim_expert_v2=True
 
 # Wandb settings
@@ -49,11 +49,11 @@ wandb_project=vla_adapter
 
 # Generate timestamp and run ID
 current_time=$(date +"%Y%m%d_%H%M%S")
-run_id_note="vla--$current_time"
+run_id_note="2f_v2_wosink"
 
 # Build MODE string with important configuration variables (excluding those already in run_id)
 # run_id already includes: config_file_path, dataset_name, batch_size*grad_accumulation_steps, learning_rate, lora_rank, image_aug
-MODE="c2f_v2_${action_probing}_img${num_images_in_input}_mini${use_minivlm}_prop${use_proprio}_pro${use_pro_version}_film${use_film}"
+MODE="${run_id_note}_img${num_images_in_input}_mini${use_minivlm}_prop${use_proprio}_pro${use_pro_version}_film${use_film}"
 
 # Build run_root_dir using MODE
 run_root_dir="outputs/${data_name}/${MODE}"

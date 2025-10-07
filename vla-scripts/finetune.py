@@ -45,7 +45,7 @@ from prismatic.training.train_utils import (
     compute_token_accuracy,
     get_current_action_mask,
     get_next_actions_mask,
-    set_seed
+    # set_seed
 )
 from prismatic.util.data_utils import PaddedCollatorForActionPrediction
 from prismatic.vla.action_tokenizer import ActionTokenizer
@@ -141,15 +141,6 @@ class FinetuneConfig:
     only_simple_action_head: bool = False
     ensemble_hidden_state: bool = False
     sim_expert_v2: bool = False
-    
-    # Perturbations
-    perturbation_type: str = "learnable_gaussian"         # Type of perturbation to apply during training. Options: "none", "learnable_gaussian", "random_gaussian", "dropout", "adversarial", "condition_aware", "feature_mixup", "token_dropout"
-    perturbation_std: float = 0.02                     # Std dev for random_gaussian perturbation
-    perturbation_dropout_p: float = 0.1                # Dropout probability for dropout perturbation
-    adversarial_step_size: float = 1e-3                # Step size for adversarial perturbation
-    condition_aware_scale: float = 0.01                # Scale for condition-aware perturbation
-    mixup_alpha: float = 0.4                           # Alpha parameter for the Beta distribution in Feature Mixup
-    token_dropout_p: float = 0.1                       # Probability of dropping a token in Token-level Dropout
 
 
 def merge_lora_adapters(checkpoint_paths: list[Path]) -> dict:
@@ -944,7 +935,7 @@ def finetune(cfg: FinetuneConfig) -> None:
     torch.cuda.empty_cache()
 
     # set seed
-    set_seed(cfg.seed)
+    # set_seed(cfg.seed)
     
     # Initialize wandb logging
     if distributed_state.is_main_process:

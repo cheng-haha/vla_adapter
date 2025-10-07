@@ -131,6 +131,8 @@ class GenerateConfig:
     action_pooling_type: str = 'attention'
     only_simple_action_head: bool = False
     ensemble_hidden_state: bool = False
+    sim_expert_v2: bool = False
+    add_sink_token: bool = False
 
 
 def validate_config(cfg: GenerateConfig) -> None:

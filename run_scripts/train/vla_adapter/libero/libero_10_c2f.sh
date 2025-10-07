@@ -16,15 +16,15 @@ export PYTHONPATH=$ROOT_PATH/vla_projects/$PROJECT_PATH
 # Dataset and paths
 data_name=libero_10_no_noops
 data_root_dir=$ROOT_PATH/datasets/openvla/modified_libero_rlds
-vlm_path=$ROOT_PATH/ai_models/qwen2_5llm_dinosiglip
-config_file_path=$ROOT_PATH/ai_models/qwen2_5llm_dinosiglip
+vlm_path=$ROOT_PATH/ai_models/Stanford-ILIAD/prism-qwen25-extra-dinosiglip-224px-0_5b
+config_file_path=pretrained_models/configs
 
 # Training parameters
 batch_size=16
 grad_accumulation_steps=1
 learning_rate=2e-4
-max_steps=150005
-num_steps_before_decay=100000
+max_steps=60005
+num_steps_before_decay=30000
 save_freq=10000
 
 # Model configuration
