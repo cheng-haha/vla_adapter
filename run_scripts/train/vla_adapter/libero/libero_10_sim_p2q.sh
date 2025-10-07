@@ -23,8 +23,8 @@ config_file_path=pretrained_models/configs
 batch_size=16
 grad_accumulation_steps=1
 learning_rate=2e-4
-max_steps=150005
-num_steps_before_decay=150005
+max_steps=60005
+num_steps_before_decay=30000
 save_freq=10000
 
 # Model configuration
@@ -37,7 +37,7 @@ use_fz=False
 use_minivlm=True
 image_aug=True
 save_latest_checkpoint_only=False
-merge_lora_during_training=False
+merge_lora_during_training=True
 use_pro_version=True
 only_simple_action_head=True
 proprio_as_queries=True
@@ -47,7 +47,7 @@ wandb_project=vla_adapter
 
 # Generate timestamp and run ID
 current_time=$(date +"%Y%m%d_%H%M%S")
-run_id_note="sim-p2q"
+run_id_note="sim-p2q+queries"
 
 # Build MODE string with important configuration variables (excluding those already in run_id)
 # run_id already includes: config_file_path, dataset_name, batch_size*grad_accumulation_steps, learning_rate, lora_rank, image_aug

@@ -23,8 +23,8 @@ config_file_path=$ROOT_PATH/ai_models/qwen2_5llm_dinosiglip
 batch_size=16
 grad_accumulation_steps=1
 learning_rate=2e-4
-max_steps=150005
-num_steps_before_decay=100000
+max_steps=60005
+num_steps_before_decay=30000
 save_freq=10000
 
 # Model configuration
@@ -37,7 +37,7 @@ use_fz=False
 use_minivlm=True
 image_aug=True
 save_latest_checkpoint_only=False
-merge_lora_during_training=False
+merge_lora_during_training=True
 save_last_checkpoint=True
 use_pro_version=True
 only_simple_action_head=True

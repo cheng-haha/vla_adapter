@@ -45,7 +45,7 @@ from prismatic.training.train_utils import (
     compute_token_accuracy,
     get_current_action_mask,
     get_next_actions_mask,
-    set_seed
+    # set_seed
 )
 from prismatic.util.data_utils import PaddedCollatorForActionPrediction
 from prismatic.vla.action_tokenizer import ActionTokenizer
@@ -932,7 +932,7 @@ def finetune(cfg: FinetuneConfig) -> None:
     torch.cuda.empty_cache()
 
     # set seed
-    set_seed(cfg.seed)
+    # set_seed(cfg.seed)
     
     # Initialize wandb logging
     if distributed_state.is_main_process:
