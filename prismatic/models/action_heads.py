@@ -224,20 +224,22 @@ class L1RegressionActionHead(nn.Module):
             )
             self.coarse_action_head = SimpleActionHead(hidden_dim, self.action_dim)
 
-        if not self.only_simple_action_head:
-            pert_dim = hidden_dim if self.action_probing else self.action_dim * hidden_dim
-            if self.perturbation_type == "learnable_gaussian":
-                self.perturbations = nn.Parameter(torch.zeros(NUM_ACTIONS_CHUNK, pert_dim))
-                nn.init.normal_(self.perturbations, mean=0.0, std=self.perturbation_std)
-            elif self.perturbation_type == "dropout":
-                self.dropout = nn.Dropout(p=perturbation_dropout_p)
-            elif self.perturbation_type == "condition_aware":
-                self.noise_generator = nn.Sequential(
-                    nn.Linear(hidden_dim, hidden_dim * 2),
-                    nn.ReLU(),
-                    nn.Linear(hidden_dim * 2, pert_dim),
-                )
+        # Determine perturbation dimension based on the architecture.
+        # If not using the simple head and not probing, the perturbation dimension is different.
+        pert_dim = self.action_dim * hidden_dim if not self.only_simple_action_head and not self.action_probing else hidden_dim
+        if self.perturbation_type == "learnable_gaussian":
+            self.perturbations = nn.Parameter(torch.zeros(NUM_ACTIONS_CHUNK, pert_dim))
+            nn.init.normal_(self.perturbations, mean=0.0, std=self.perturbation_std)
+        elif self.perturbation_type == "dropout":
+            self.dropout = nn.Dropout(p=perturbation_dropout_p)
+        elif self.perturbation_type == "condition_aware":
+            self.noise_generator = nn.Sequential(
+                nn.Linear(hidden_dim, hidden_dim * 2),
+                nn.ReLU(),
+                nn.Linear(hidden_dim * 2, pert_dim),
+            )
 
+        if not self.only_simple_action_head:
             self.model = MLPResNet(
                 num_blocks=24,
                 input_dim=self.action_dim * input_dim if not self.action_probing else hidden_dim,
@@ -348,6 +350,12 @@ class L1RegressionActionHead(nn.Module):
 
             # Pool action tokens into action chunks
             pooled_actions_hidden = self.token_pooler(actions_hidden_states) # (B, NUM_ACTIONS_CHUNK, D)
+
+            # Apply perturbations during training for regularization
+            if self.training:
+                pooled_actions_hidden = self._apply_perturbations(
+                    pooled_actions_hidden, ground_truth_actions, proprio, proprio_projector
+                )
 
             # Get action prediction
             action, _ = self.coarse_action_head(pooled_actions_hidden)
