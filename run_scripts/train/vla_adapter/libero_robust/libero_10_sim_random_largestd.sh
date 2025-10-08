@@ -2,8 +2,8 @@
 ###
  # @Description: 
  # @Date: 2025-09-25 22:13:40
- # @LastEditTime: 2025-10-03 19:43:12
- # @FilePath: \vla_adapter\run_scripts\train\vla_adapter\libero\libero_10_sim_merge.sh
+ # @LastEditTime: 2025-10-08 02:44:39
+ # @FilePath: \vla_adapter\run_scripts\train\vla_adapter\libero_robust\libero_10_sim_random.sh
 ### 
 
 #========== Basic Settings ==========#
@@ -23,9 +23,9 @@ config_file_path=pretrained_models/configs
 batch_size=16
 grad_accumulation_steps=1
 learning_rate=2e-4
-max_steps=105
-num_steps_before_decay=50
-save_freq=10
+max_steps=60005
+num_steps_before_decay=30000
+save_freq=10000
 
 # Model configuration
 num_images_in_input=2
@@ -37,18 +37,18 @@ use_fz=False
 use_minivlm=True
 image_aug=True
 save_latest_checkpoint_only=False
-merge_lora_during_training=False
+merge_lora_during_training=True
 use_pro_version=True
 only_simple_action_head=True
-merge_fine_tuning=True
-num_lora_to_merge=10
+perturbation_type="random_gaussian"
+perturbation_std=0.1
 # Wandb settings
 wandb_entity=chenghaha
 wandb_project=vla_adapter
 
 # Generate timestamp and run ID
 current_time=$(date +"%Y%m%d_%H%M%S")
-run_id_note="sim-merge-${num_lora_to_merge}"
+run_id_note="sim-perturbation_type_${perturbation_type}"
 
 # Build MODE string with important configuration variables (excluding those already in run_id)
 # run_id already includes: config_file_path, dataset_name, batch_size*grad_accumulation_steps, learning_rate, lora_rank, image_aug
@@ -61,7 +61,7 @@ run_root_dir="outputs/${data_name}/${MODE}-$current_time"
 mkdir -p logs
 
 #========== Training Execution ==========#
-torchrun --standalone --nnodes 1 --nproc-per-node 4 vla-scripts/finetune.py \
+python -m debugpy --listen 1234 --wait-for-client '/root/anaconda3/envs/vla-adapter/bin/torchrun' --standalone --nnodes 1 --nproc-per-node 1 vla-scripts/finetune.py \
   --vlm_path $vlm_path \
   --config_file_path $config_file_path \
   --data_root_dir $data_root_dir \
@@ -88,8 +88,8 @@ torchrun --standalone --nnodes 1 --nproc-per-node 4 vla-scripts/finetune.py \
   --wandb_project "$wandb_project" \
   --run_id_note $run_id_note \
   --only_simple_action_head $only_simple_action_head \
-  --merge_fine_tuning $merge_fine_tuning \
-  --num_lora_to_merge $num_lora_to_merge
+  --perturbation_type $perturbation_type \
+  --perturbation_std $perturbation_std
 
 echo "Training started with run ID: $run_id_note"
 echo "Output directory: $run_root_dir"
