@@ -823,6 +823,7 @@ def get_vla_action(
                 noisy_action_projector=noisy_action_projector,
                 action_head=action_head,
                 use_film=use_film,
+                proprio_as_queries=cfg.proprio_as_queries
             )
 
     # Extract subset of actions for open loop steps

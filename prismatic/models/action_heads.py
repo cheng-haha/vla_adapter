@@ -319,7 +319,7 @@ class L1RegressionActionHead(nn.Module):
             mask = torch.bernoulli(torch.full((B, N, 1), keep_prob, device=x.device, dtype=x.dtype))
             
             # Scale the output to maintain the same expected sum.
-            return x * mask / keep_prob
+            return x * mask
         return x
 
     def predict_action(

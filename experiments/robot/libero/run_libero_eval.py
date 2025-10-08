@@ -133,7 +133,7 @@ class GenerateConfig:
     ensemble_hidden_state: bool = False
     sim_expert_v2: bool = False
     add_sink_token: bool = False
-
+    proprio_as_queries: bool = False
 
 def validate_config(cfg: GenerateConfig) -> None:
     """Validate configuration parameters."""

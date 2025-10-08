@@ -2,8 +2,8 @@
 ###
  # @Description: 
  # @Date: 2025-09-25 22:13:40
- # @LastEditTime: 2025-10-08 02:42:48
- # @FilePath: \vla_adapter\run_scripts\train\vla_adapter\libero_robust\libero_10_sim_lean_gassin.sh
+ # @LastEditTime: 2025-10-08 02:44:39
+ # @FilePath: \vla_adapter\run_scripts\train\vla_adapter\libero_robust\libero_10_sim_random.sh
 ### 
 
 #========== Basic Settings ==========#
@@ -40,15 +40,14 @@ save_latest_checkpoint_only=False
 merge_lora_during_training=True
 use_pro_version=True
 only_simple_action_head=True
-perturbation_type="random_gaussian"
-perturbation_std=0.1
+perturbation_type="token_dropout"
 # Wandb settings
 wandb_entity=chenghaha
 wandb_project=vla_adapter
 
 # Generate timestamp and run ID
 current_time=$(date +"%Y%m%d_%H%M%S")
-run_id_note="sim-perturbation_type_${perturbation_type}_perturbation_std${perturbation_std}"
+run_id_note="sim-perturbation_type_${perturbation_type}"
 
 # Build MODE string with important configuration variables (excluding those already in run_id)
 # run_id already includes: config_file_path, dataset_name, batch_size*grad_accumulation_steps, learning_rate, lora_rank, image_aug
@@ -88,7 +87,6 @@ torchrun --standalone --nnodes 1 --nproc-per-node 4 vla-scripts/finetune.py \
   --wandb_project "$wandb_project" \
   --run_id_note $run_id_note \
   --only_simple_action_head $only_simple_action_head \
-  --perturbation_std $perturbation_std \
   --perturbation_type $perturbation_type
 
 echo "Training started with run ID: $run_id_note"
