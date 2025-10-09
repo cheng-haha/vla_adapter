@@ -1,0 +1,2 @@
+bash run_scripts/train/vla_adapter/libero_ds/libero_10_sim_ds.sh
+bash run_scripts/train/vla_adapter/libero_ds/libero_10_sim_ds_ensemble.sh

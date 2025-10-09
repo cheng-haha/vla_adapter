@@ -199,6 +199,8 @@ class L1RegressionActionHead(nn.Module):
         condition_aware_scale: float = 0.01,
         mixup_alpha: float = 0.4,
         token_dropout_p: float = 0.1,
+        deep_supervise: bool = False,
+        deep_supervise_ensemble: bool = False,
     ):
         super().__init__()
         self.num_task_tokens = num_task_tokens
@@ -216,14 +218,39 @@ class L1RegressionActionHead(nn.Module):
         self.condition_aware_scale = condition_aware_scale
         self.mixup_alpha = mixup_alpha
         self.token_dropout_p = token_dropout_p
+        self.deep_supervise = deep_supervise
+        self.deep_supervise_ensemble = deep_supervise_ensemble
 
-        # always create the simple head components for probing or for simple head only mode
-        if self.action_probing or self.only_simple_action_head:
+        # Create heads for deep supervision, probing, or simple head mode
+        if self.deep_supervise or self.deep_supervise_ensemble:
+            self.token_pooler_low = ActionTokenPooling(
+                pooling_type=self.action_pooling_type,
+                input_dim=hidden_dim,
+                num_tokens=NUM_TOKENS,
+                num_chunks=NUM_ACTIONS_CHUNK,
+            )
+            self.coarse_action_head_low = SimpleActionHead(hidden_dim, self.action_dim)
+            self.token_pooler_mid = ActionTokenPooling(
+                pooling_type=self.action_pooling_type,
+                input_dim=hidden_dim,
+                num_tokens=NUM_TOKENS,
+                num_chunks=NUM_ACTIONS_CHUNK,
+            )
+            self.coarse_action_head_mid = SimpleActionHead(hidden_dim, self.action_dim)
+            self.token_pooler_high = ActionTokenPooling(
+                pooling_type=self.action_pooling_type,
+                input_dim=hidden_dim,
+                num_tokens=NUM_TOKENS,
+                num_chunks=NUM_ACTIONS_CHUNK,
+            )
+            self.coarse_action_head = SimpleActionHead(hidden_dim, self.action_dim)
+
+        elif self.action_probing or self.only_simple_action_head:
             self.token_pooler = ActionTokenPooling(
                 pooling_type=self.action_pooling_type,
                 input_dim=hidden_dim,
                 num_tokens=NUM_TOKENS,
-                num_chunks=NUM_ACTIONS_CHUNK
+                num_chunks=NUM_ACTIONS_CHUNK,
             )
             self.coarse_action_head = SimpleActionHead(hidden_dim, self.action_dim)
 
@@ -343,7 +370,7 @@ class L1RegressionActionHead(nn.Module):
         task_hidden_states = actions_hidden_states[:, :, : self.num_task_tokens, :]
         actions_hidden_states = actions_hidden_states[:, :, self.num_task_tokens :, :]
 
-        if self.only_simple_action_head:
+        if self.only_simple_action_head and not self.deep_supervise and not self.deep_supervise_ensemble:
             if self.ensemble_hidden_state:
                 # Mean hidden states across all layers
                 actions_hidden_states = actions_hidden_states.mean(dim=1)  # (B, NUM_TOKENS, D)
@@ -363,6 +390,33 @@ class L1RegressionActionHead(nn.Module):
             # Get action prediction
             action, _ = self.coarse_action_head(pooled_actions_hidden)
             return action, None, ground_truth_actions
+
+        if self.deep_supervise or self.deep_supervise_ensemble:
+            # Deep supervision uses coarse heads on low, mid, and high layers.
+            # We assume actions_hidden_states contains multi-layer representations.
+            # Layer indices are chosen based on a 24-layer architecture.
+            hidden_low = actions_hidden_states[:, 4, :, :]
+            hidden_mid = actions_hidden_states[:, 16, :, :]
+            hidden_high = actions_hidden_states[:, -1, :, :]
+
+            pooled_low = self.token_pooler_low(hidden_low)
+            pooled_mid = self.token_pooler_mid(hidden_mid)
+            pooled_high = self.token_pooler_high(hidden_high)
+
+            coarse_action_low, _ = self.coarse_action_head_low(pooled_low)
+            coarse_action_mid, _ = self.coarse_action_head_mid(pooled_mid)
+            coarse_action_high, _ = self.coarse_action_head(pooled_high)
+
+            coarse_actions = [coarse_action_low, coarse_action_mid, coarse_action_high]
+
+            if self.deep_supervise_ensemble:
+                ensembled_action = torch.stack(coarse_actions).mean(dim=0)
+                return ensembled_action, coarse_actions, ground_truth_actions
+            else: # deep_supervise
+                 # For deep_supervise, we don't return a single main action,
+                # but the list of coarse actions for loss computation.
+                # The "action" is just one of them for compatibility, but not used for loss.
+                return coarse_action_high, coarse_actions, ground_truth_actions
 
         if self.action_probing:
             # Use the last layer's action hidden states
@@ -400,6 +454,8 @@ class L1RegressionActionHead(nn.Module):
                 # Mix features and ground truth actions
                 rearranged_actions_hidden_states = lam * rearranged_actions_hidden_states + (1 - lam) * rearranged_actions_hidden_states[idx]
                 ground_truth_actions_for_loss = lam * ground_truth_actions + (1 - lam) * ground_truth_actions[idx]
+            else:
+                ground_truth_actions_for_loss = ground_truth_actions
 
 
         action = self.model(rearranged_actions_hidden_states, h_a=actions_hidden_states, p=proprio_features, h_t=task_hidden_states)
