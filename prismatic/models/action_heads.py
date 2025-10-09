@@ -120,7 +120,10 @@ class SimpleActionHead(nn.Module):
             nn.Linear(hidden_dim, hidden_dim),
             nn.ReLU(),
         )
-        self.action_predictor = nn.Linear(hidden_dim, action_dim)
+        self.action_predictor = nn.Sequential(
+            nn.LayerNorm(hidden_dim),
+            nn.Linear(hidden_dim, action_dim)
+        )
 
     def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         """

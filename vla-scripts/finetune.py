@@ -143,7 +143,7 @@ class FinetuneConfig:
     sim_expert_v2: bool = False
 
     # Perturbations
-    perturbation_type: str = "learnable_gaussian"      # Type of perturbation to apply during training. Options: "none", "learnable_gaussian", "random_gaussian", "dropout", "adversarial", "condition_aware", "feature_mixup", "token_dropout"
+    perturbation_type: str = "none"                     # Type of perturbation to apply during training. Options: "none", "learnable_gaussian", "random_gaussian", "dropout", "adversarial", "condition_aware", "feature_mixup", "token_dropout"
     perturbation_std: float = 0.02                     # Std dev for random_gaussian perturbation
     perturbation_dropout_p: float = 0.1                # Dropout probability for dropout perturbation
     adversarial_step_size: float = 1e-3                # Step size for adversarial perturbation
