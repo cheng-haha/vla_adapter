@@ -189,16 +189,16 @@ class PreNormResidual(nn.Module):
 class MlpMixerHead(nn.Module):
     """An MLP-Mixer based action head for action prediction."""
 
-    def __init__(self, num_chunks: int, dim: int, depth: int, action_dim: int, expansion_factor: float = 4.0, expansion_factor_token: float = 1.0):
+    def __init__(self, num_chunks: int, dim: int, depth: int, action_dim: int, expansion_factor: float = 1.0, expansion_factor_token: float = 1.0):
         super().__init__()
 
         # An MLP for token subsampling.
-        subsampler_hidden_dim = NUM_TOKENS * 2
+        # subsampler_hidden_dim = NUM_TOKENS * 2
         self.token_subsampler = nn.Sequential(
             nn.LayerNorm(NUM_TOKENS),
-            nn.Linear(NUM_TOKENS, subsampler_hidden_dim),
-            nn.ReLU(),
-            nn.Linear(subsampler_hidden_dim, num_chunks),
+            # nn.Linear(NUM_TOKENS, subsampler_hidden_dim),
+            # nn.ReLU(),
+            nn.Linear(NUM_TOKENS, num_chunks),
         )
 
         class TokenMixer(nn.Module):

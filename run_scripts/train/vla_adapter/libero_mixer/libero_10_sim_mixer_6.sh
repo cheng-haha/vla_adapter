@@ -40,14 +40,14 @@ save_latest_checkpoint_only=False
 merge_lora_during_training=True
 use_pro_version=True
 use_mlp_mixer=True
-mlp_mixer_depth=2
+mlp_mixer_depth=6
 # Wandb settings
 wandb_entity=chenghaha
 wandb_project=vla_adapter
 
 # Generate timestamp and run ID
 current_time=$(date +"%Y%m%d_%H%M%S")
-run_id_note="sim_ds"
+run_id_note="sim_mixer_d${mlp_mixer_depth}"
 
 # Build MODE string with important configuration variables (excluding those already in run_id)
 # run_id already includes: config_file_path, dataset_name, batch_size*grad_accumulation_steps, learning_rate, lora_rank, image_aug
@@ -60,7 +60,7 @@ run_root_dir="outputs/${data_name}/${MODE}-$current_time"
 mkdir -p logs
 
 #========== Training Execution ==========#
-torchrun --standalone --nnodes 1 --nproc-per-node 4 vla-scripts/finetune_ds.py \
+torchrun --standalone --nnodes 1 --nproc-per-node 4 vla-scripts/finetune.py \
   --vlm_path $vlm_path \
   --config_file_path $config_file_path \
   --data_root_dir $data_root_dir \

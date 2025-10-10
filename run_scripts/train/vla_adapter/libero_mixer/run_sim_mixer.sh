@@ -1,0 +1,2 @@
+bash run_scripts/train/vla_adapter/libero_mixer/libero_10_sim_mixer_2.sh
+bash run_scripts/train/vla_adapter/libero_mixer/libero_10_sim_mixer_6.sh
