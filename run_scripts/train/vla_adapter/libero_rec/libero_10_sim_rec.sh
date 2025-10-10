@@ -2,8 +2,8 @@
 ###
  # @Description: 
  # @Date: 2025-09-25 22:13:40
- # @LastEditTime: 2025-10-10 17:10:57
- # @FilePath: \vla_adapter\run_scripts\train\vla_adapter\libero_mixer\libero_10_sim_ds.sh
+ # @LastEditTime: 2025-10-11 01:52:42
+ # @FilePath: \vla_adapter\run_scripts\train\vla_adapter\libero_rec\debug_libero_10_rec.sh
 ### 
 
 #========== Basic Settings ==========#
@@ -59,7 +59,7 @@ run_root_dir="outputs/${data_name}/${MODE}-$current_time"
 mkdir -p logs
 
 #========== Training Execution ==========#
-torchrun --standalone --nnodes 1 --nproc-per-node 4 vla-scripts/finetune.py \
+torchrun --standalone --nnodes 1 --nproc-per-node 4 vla-scripts/finetune_rec.py \
   --vlm_path $vlm_path \
   --config_file_path $config_file_path \
   --data_root_dir $data_root_dir \

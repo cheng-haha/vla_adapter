@@ -351,7 +351,7 @@ class L1RegressionActionHead(nn.Module):
                 action_dim=self.action_dim,
                 latent_dim=hidden_dim,
                 num_chunks=NUM_ACTIONS_CHUNK,
-                mixer_depth=4, # A reasonable default
+                mixer_depth=2, # A reasonable default
             )
             return
 
@@ -500,7 +500,7 @@ class L1RegressionActionHead(nn.Module):
 
             # x_query from VLM hidden states. Let's use the last layer and mean-pool tokens.
             # This is a simplification. A more sophisticated approach might be needed.
-            actions_hidden_states = actions_hidden_states[:, -1, :, :]  # (B, NUM_TOKENS, D)
+            actions_hidden_states = actions_hidden_states[:, -1, self.num_task_tokens :, :]
             # Pool action tokens into action chunks
             x_query = self.token_pooler(actions_hidden_states) # (B, NUM_ACTIONS_CHUNK, D)
             # Initialize y and z
@@ -1125,7 +1125,7 @@ class PolicyNetwork(nn.Module):
     A lightweight, stackable FFN head with residual connections.
     Can be used as a full action head or as a latent feature refiner.
     """
-    def __init__(self, input_dim: int, hidden_dim: int, action_dim: int, num_layers: int = 2, ffn_dim_multiplier: int = 1):
+    def __init__(self, input_dim: int, hidden_dim: int, action_dim: int, num_layers: int = 4, ffn_dim_multiplier: int = 1):
         super().__init__()
         
         self.net = nn.ModuleList()

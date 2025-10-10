@@ -150,7 +150,7 @@ class FinetuneConfig:
     T_recursion: int = 3                             # Number of deep recursion steps
 
     # Perturbations
-    perturbation_type: str = "none"                     # Type of perturbation to apply during training. Options: "none", "learnable_gaussian", "random_gaussian", "dropout", "adversarial", "condition_aware", "feature_mixup", "token_dropout"
+    perturbation_type: str = "none"                    # Type of perturbation to apply during training. Options: "none", "learnable_gaussian", "random_gaussian", "dropout", "adversarial", "condition_aware", "feature_mixup", "token_dropout"
     perturbation_std: float = 0.02                     # Std dev for random_gaussian perturbation
     perturbation_dropout_p: float = 0.1                # Dropout probability for dropout perturbation
     adversarial_step_size: float = 1e-3                # Step size for adversarial perturbation
@@ -1131,6 +1131,7 @@ def finetune(cfg: FinetuneConfig) -> None:
                 "condition_aware_scale": cfg.condition_aware_scale,
                 "mixup_alpha": cfg.mixup_alpha,
                 "token_dropout_p": cfg.token_dropout_p,
+                "use_deep_recursion": cfg.use_deep_recursion
             } if not cfg.use_mlp_mixer else {
                 "num_chunks": NUM_ACTIONS_CHUNK,
                 "dim": vla.module.llm_dim,
