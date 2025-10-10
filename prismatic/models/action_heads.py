@@ -116,8 +116,8 @@ class ActionTokenPooling(nn.Module):
 
 class SimpleActionHead(nn.Module):
     """
-    A lightweight, stackable FFN head with residual connections to generate action predictions
-    from pooled action token hidden states.
+    A lightweight, stackable FFN head with residual connections.
+    Can be used as a full action head or as a latent feature refiner.
     """
     def __init__(self, hidden_dim: int, action_dim: int, num_layers: int = 2, ffn_dim_multiplier: int = 1):
         super().__init__()
@@ -304,6 +304,9 @@ class L1RegressionActionHead(nn.Module):
         ensemble_hidden_state=False,
         sim_expert_v2=False,
         add_sink_token=False,
+        use_deep_recursion=False,
+        n_recursion=6,
+        T_recursion=3,
         perturbation_type: str = "learnable_gaussian",
         perturbation_std: float = 0.02,
         perturbation_dropout_p: float = 0.1,
@@ -324,6 +327,9 @@ class L1RegressionActionHead(nn.Module):
         self.ensemble_hidden_state = ensemble_hidden_state
         self.sim_expert_v2 = sim_expert_v2
         self.add_sink_token = add_sink_token
+        self.use_deep_recursion = use_deep_recursion
+        self.n_recursion = n_recursion
+        self.T_recursion = T_recursion
         self.perturbation_type = perturbation_type
         self.perturbation_std = perturbation_std
         self.adversarial_step_size = adversarial_step_size
@@ -332,6 +338,22 @@ class L1RegressionActionHead(nn.Module):
         self.token_dropout_p = token_dropout_p
         self.deep_supervise = deep_supervise
         self.deep_supervise_ensemble = deep_supervise_ensemble
+
+        if self.use_deep_recursion:
+            self.token_pooler = ActionTokenPooling(
+                pooling_type=self.action_pooling_type,
+                input_dim=hidden_dim,
+                num_tokens=NUM_TOKENS,
+                num_chunks=NUM_ACTIONS_CHUNK,
+            )
+            self.recursive_action_head = RecursiveActionHead(
+                vlm_dim=hidden_dim,
+                action_dim=self.action_dim,
+                latent_dim=hidden_dim,
+                num_chunks=NUM_ACTIONS_CHUNK,
+                mixer_depth=4, # A reasonable default
+            )
+            return
 
         # Create heads for deep supervision, probing, or simple head mode
         if self.deep_supervise or self.deep_supervise_ensemble:
@@ -472,6 +494,31 @@ class L1RegressionActionHead(nn.Module):
             phase="Inference",
             ground_truth_actions: Optional[torch.Tensor] = None,
             ) -> Tuple[torch.Tensor, torch.Tensor | None, torch.Tensor]:
+        if self.use_deep_recursion:
+            batch_size = actions_hidden_states.shape[0]
+            device = actions_hidden_states.device
+
+            # x_query from VLM hidden states. Let's use the last layer and mean-pool tokens.
+            # This is a simplification. A more sophisticated approach might be needed.
+            actions_hidden_states = actions_hidden_states[:, -1, :, :]  # (B, NUM_TOKENS, D)
+            # Pool action tokens into action chunks
+            x_query = self.token_pooler(actions_hidden_states) # (B, NUM_ACTIONS_CHUNK, D)
+            # Initialize y and z
+            y_init = torch.zeros(batch_size, NUM_ACTIONS_CHUNK, self.action_dim, device=device, dtype=x_query.dtype)
+            z_init = torch.zeros(batch_size, NUM_ACTIONS_CHUNK, self.recursive_action_head.latent_dim, device=device, dtype=x_query.dtype)
+            
+            # Detach x_query if we are only training the policy
+            if phase == "PolicyTraining":
+                x_query = x_query.detach()
+
+            (y, z), y_hat = self.recursive_action_head.deep_recursion(
+                x_query, y_init, z_init, n=self.n_recursion, T=self.T_recursion
+            )
+            
+            # The pseudocode implies y_hat is the prediction for loss.
+            # ground_truth_actions should be returned for loss calculation.
+            return y_hat, None, ground_truth_actions
+
         batch_size = actions_hidden_states.shape[0]
         device = actions_hidden_states.device
 
@@ -1031,3 +1078,150 @@ class MLPResNetBlock_Pro(nn.Module):
         # residual + FFN
         x = self.ffn(output + x)
         return x
+
+
+class GeneralMixer(nn.Module):
+    """A general MLP-Mixer architecture."""
+
+    def __init__(self, num_chunks: int, input_dim: int, hidden_dim: int, depth: int, output_dim: int, expansion_factor: float = 1.0):
+        super().__init__()
+
+        self.input_proj = nn.Sequential(
+            nn.LayerNorm(input_dim),
+            nn.Linear(input_dim, hidden_dim),
+            nn.ReLU()
+        )
+
+        class TokenMixer(nn.Module):
+            def __init__(self, num_chunks: int, expansion_factor: float):
+                super().__init__()
+                self.ff = FeedForward(num_chunks, int(expansion_factor * num_chunks))
+
+            def forward(self, x: torch.Tensor) -> torch.Tensor:
+                return self.ff(x.transpose(1, 2)).transpose(1, 2)
+
+        chan_ff = FeedForward(hidden_dim, int(expansion_factor * hidden_dim))
+
+        self.mixer_blocks = nn.ModuleList(
+            [
+                nn.Sequential(
+                    PreNormResidual(hidden_dim, TokenMixer(num_chunks, expansion_factor)),
+                    PreNormResidual(hidden_dim, chan_ff),
+                )
+                for _ in range(depth)
+            ]
+        )
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x = self.input_proj(x)
+        for mixer_block in self.mixer_blocks:
+            x = mixer_block(x)
+        return x
+
+
+
+class PolicyNetwork(nn.Module):
+    """
+    A lightweight, stackable FFN head with residual connections.
+    Can be used as a full action head or as a latent feature refiner.
+    """
+    def __init__(self, input_dim: int, hidden_dim: int, action_dim: int, num_layers: int = 2, ffn_dim_multiplier: int = 1):
+        super().__init__()
+        
+        self.net = nn.ModuleList()
+        for _ in range(num_layers):
+            self.net.append(nn.Sequential(
+                nn.LayerNorm(hidden_dim),
+                nn.Linear(hidden_dim, hidden_dim * ffn_dim_multiplier),
+                nn.ReLU(),
+                nn.Linear(hidden_dim * ffn_dim_multiplier, hidden_dim),
+            ))
+
+        self.connector = nn.Sequential(
+            nn.LayerNorm(input_dim),
+            nn.Linear(input_dim, hidden_dim),
+            nn.ReLU(),
+        )
+        self.output_head = nn.Sequential(
+            nn.LayerNorm(hidden_dim),
+            nn.Linear(hidden_dim, action_dim)
+        )
+
+    def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+        """
+        Forward pass.
+
+        Args:
+            x (torch.Tensor): Input tensor of shape (B, NUM_ACTIONS_CHUNK, D).
+
+        Returns:
+            Tuple[torch.Tensor, torch.Tensor]: A tuple containing:
+                - coarse_action (torch.Tensor): Coarse action prediction of shape (B, NUM_ACTIONS_CHUNK, ACTION_DIM).
+                - representation (torch.Tensor): Intermediate representation of shape (B, NUM_ACTIONS_CHUNK, D).
+        """
+        representation = self.connector(x)
+        for block in self.net:
+            representation = representation + block(representation)
+
+        coarse_action = self.output_head(representation)
+        return coarse_action, representation
+
+class ActionRefiner(nn.Module):
+    """
+    An action refiner module using MLP-Mixer. It performs one step of refinement.
+    z_new = mixer(x, y, z)
+    y_new = head(z_new)
+    """
+
+    def __init__(self, vlm_dim: int, action_dim: int, latent_dim: int, num_chunks: int, mixer_depth: int):
+        super().__init__()
+        # 
+        self.action_refiner = PolicyNetwork(
+            input_dim=vlm_dim + action_dim + latent_dim,
+            hidden_dim=latent_dim,  # mixer operates in latent space
+            action_dim=action_dim,
+            num_layers=mixer_depth,
+            ffn_dim_multiplier=1
+        )
+
+    def forward(self, x: torch.Tensor, y: torch.Tensor, z: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+        """
+        Performs one step of recursive refinement.
+
+        Args:
+            x (torch.Tensor): Query embedding from VLM.
+            y (torch.Tensor): Current action prediction.
+            z (torch.Tensor): Current latent representation.
+
+        Returns:
+            Tuple[torch.Tensor, torch.Tensor]: A tuple containing:
+                - y_new (torch.Tensor): The refined action.
+                - z_new (torch.Tensor): The refined latent representation.
+        """
+        inp = torch.cat([x, y, z], dim=-1)
+        y_new, z_new = self.action_refiner(inp)
+        return y_new, z_new
+
+
+class RecursiveActionHead(nn.Module):
+    """Implements the deep recursion algorithm for action generation."""
+
+    def __init__(self, vlm_dim: int, action_dim: int, latent_dim: int, num_chunks: int, mixer_depth: int):
+        super().__init__()
+        self.latent_dim = latent_dim
+        self.action_refiner = ActionRefiner(vlm_dim, action_dim, latent_dim, num_chunks, mixer_depth)
+
+    def latent_recursion(self, x: torch.Tensor, y: torch.Tensor, z: torch.Tensor, n: int = 6) -> Tuple[torch.Tensor, torch.Tensor]:
+        for _ in range(n):  # latent recursion
+            y, z = self.action_refiner(x, y, z)
+        return y, z
+
+    def deep_recursion(self, x: torch.Tensor, y: torch.Tensor, z: torch.Tensor, n: int = 6, T: int = 3) -> Tuple[Tuple[torch.Tensor, torch.Tensor], torch.Tensor]:
+        # recursing T-1 times to improve y and z (no gradients needed)
+        with torch.no_grad():
+            for _ in range(T - 1):
+                y, z = self.latent_recursion(x, y, z, n)
+        # recursing once to improve y and z
+        y, z = self.latent_recursion(x, y, z, n)
+        # The final action `y` is the prediction.
+        return (y.detach(), z.detach()), y
