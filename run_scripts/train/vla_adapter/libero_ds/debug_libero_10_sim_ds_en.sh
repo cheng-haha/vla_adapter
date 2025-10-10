@@ -39,7 +39,7 @@ image_aug=True
 save_latest_checkpoint_only=False
 merge_lora_during_training=True
 use_pro_version=True
-deep_supervise=True
+deep_supervise_ensemble=True
 # Wandb settings
 wandb_entity=chenghaha
 wandb_project=vla_adapter
