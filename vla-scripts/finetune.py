@@ -36,7 +36,7 @@ from experiments.robot.openvla_utils import (
 from prismatic.extern.hf.configuration_prismatic import OpenVLAConfig
 from prismatic.extern.hf.modeling_prismatic import OpenVLAForActionPrediction
 from prismatic.extern.hf.processing_prismatic import PrismaticImageProcessor, PrismaticProcessor
-from prismatic.models.action_heads import L1RegressionActionHead
+from prismatic.models.action_heads import L1RegressionActionHead, MlpMixerHead
 from prismatic.models.backbones.llm.prompting import PurePromptBuilder
 from prismatic.models.film_vit_wrapper import FiLMedPrismaticVisionBackbone
 from prismatic.models.projectors import ProprioProjector
@@ -141,6 +141,8 @@ class FinetuneConfig:
     only_simple_action_head: bool = False
     ensemble_hidden_state: bool = False
     sim_expert_v2: bool = False
+    use_mlp_mixer: bool = False                      # If True, uses MlpMixerHead for action prediction
+    mlp_mixer_depth: int = 4                         # Depth of the MLP-Mixer
 
     # Perturbations
     perturbation_type: str = "none"                     # Type of perturbation to apply during training. Options: "none", "learnable_gaussian", "random_gaussian", "dropout", "adversarial", "condition_aware", "feature_mixup", "token_dropout"
@@ -1100,31 +1102,37 @@ def finetune(cfg: FinetuneConfig) -> None:
 
     # If applicable, instantiate continuous action head for L1 regression
     if cfg.use_l1_regression:
+        action_head_class = MlpMixerHead if cfg.use_mlp_mixer else L1RegressionActionHead
         action_head = init_module(
-        L1RegressionActionHead,
-        "action_head",
-        cfg,
-        device_id,
-        {
-            "input_dim": vla.module.llm_dim, 
-            "hidden_dim": vla.module.llm_dim, 
-            "action_dim": ACTION_DIM,
-            "use_pro_version": cfg.use_pro_version,
-            "action_probing": cfg.action_probing,
-            "action_pooling_type": cfg.action_pooling_type,
-            "only_simple_action_head": cfg.only_simple_action_head,
-            "ensemble_hidden_state": cfg.ensemble_hidden_state,
-            "sim_expert_v2": cfg.sim_expert_v2,
-            "add_sink_token": cfg.add_sink_token,
-            "perturbation_type": cfg.perturbation_type,
-            "perturbation_std": cfg.perturbation_std,
-            "perturbation_dropout_p": cfg.perturbation_dropout_p,
-            "adversarial_step_size": cfg.adversarial_step_size,
-            "condition_aware_scale": cfg.condition_aware_scale,
-            "mixup_alpha": cfg.mixup_alpha,
-            "token_dropout_p": cfg.token_dropout_p,
+            action_head_class,
+            "action_head",
+            cfg,
+            device_id,
+            {
+                "input_dim": vla.module.llm_dim, 
+                "hidden_dim": vla.module.llm_dim, 
+                "action_dim": ACTION_DIM,
+                "use_pro_version": cfg.use_pro_version,
+                "action_probing": cfg.action_probing,
+                "action_pooling_type": cfg.action_pooling_type,
+                "only_simple_action_head": cfg.only_simple_action_head,
+                "ensemble_hidden_state": cfg.ensemble_hidden_state,
+                "sim_expert_v2": cfg.sim_expert_v2,
+                "add_sink_token": cfg.add_sink_token,
+                "perturbation_type": cfg.perturbation_type,
+                "perturbation_std": cfg.perturbation_std,
+                "perturbation_dropout_p": cfg.perturbation_dropout_p,
+                "adversarial_step_size": cfg.adversarial_step_size,
+                "condition_aware_scale": cfg.condition_aware_scale,
+                "mixup_alpha": cfg.mixup_alpha,
+                "token_dropout_p": cfg.token_dropout_p,
+            } if not cfg.use_mlp_mixer else {
+                "num_chunks": NUM_ACTIONS_CHUNK,
+                "dim": vla.module.llm_dim,
+                "depth": cfg.mlp_mixer_depth, # A reasonable default depth for the mixer
+                "action_dim": ACTION_DIM,
             },
-        to_bf16=True,
+            to_bf16=True,
         )
 
     # Get number of vision patches

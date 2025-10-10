@@ -134,6 +134,11 @@ class GenerateConfig:
     sim_expert_v2: bool = False
     add_sink_token: bool = False
     proprio_as_queries: bool = False
+    perturbation_type:str = 'none'
+    use_mlp_mixer:bool = False
+    mlp_mixer_depth: int = 4                         # Depth of the MLP-Mixer
+    deep_supervise:bool = False
+    deep_supervise_ensemble:bool = False
 
 def validate_config(cfg: GenerateConfig) -> None:
     """Validate configuration parameters."""

@@ -50,6 +50,14 @@ class ActionTokenPooling(nn.Module):
                 self.chunk_sizes = [self.num_tokens]
             
             assert sum(self.chunk_sizes) == self.num_tokens, "Sum of chunk sizes must equal total number of tokens."
+        elif pooling_type == "mixer":
+            self.mixer_mlp = nn.Sequential(
+                nn.LayerNorm(self.num_tokens),
+                nn.Linear(self.num_tokens, self.num_tokens * 2),
+                nn.ReLU(),
+                nn.Linear(self.num_tokens * 2, self.num_chunks)
+            )
+
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
@@ -93,6 +101,14 @@ class ActionTokenPooling(nn.Module):
                 outputs.append(chunk.mean(dim=1, keepdim=True))
                 start_idx = end_idx
             return torch.cat(outputs, dim=1)
+        
+        elif self.pooling_type == "mixer":
+            # (B, NUM_TOKENS, D) -> (B, D, NUM_TOKENS)
+            x_transposed = x.transpose(1, 2)
+            # (B, D, NUM_TOKENS) -> (B, D, NUM_ACTIONS_CHUNK)
+            pooled = self.mixer_mlp(x_transposed)
+            # (B, D, NUM_ACTIONS_CHUNK) -> (B, NUM_ACTIONS_CHUNK, D)
+            return pooled.transpose(1, 2)
 
         else:
             raise ValueError(f"Unknown pooling type: {self.pooling_type}")
@@ -143,6 +159,102 @@ class SimpleActionHead(nn.Module):
 
         coarse_action = self.action_predictor(representation)
         return coarse_action, representation
+
+
+class FeedForward(nn.Module):
+    """A simple feed-forward network with ReLU activation and no dropout."""
+    def __init__(self, dim: int, hidden_dim: int):
+        super().__init__()
+        self.net = nn.Sequential(
+            nn.Linear(dim, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, dim),
+        )
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.net(x)
+
+
+class PreNormResidual(nn.Module):
+    """Applies layer normalization before a function and adds a residual connection."""
+    def __init__(self, dim: int, fn: nn.Module):
+        super().__init__()
+        self.fn = fn
+        self.norm = nn.LayerNorm(dim)
+
+    def forward(self, x: torch.Tensor, **kwargs) -> torch.Tensor:
+        return self.fn(self.norm(x), **kwargs) + x
+
+
+class MlpMixerHead(nn.Module):
+    """An MLP-Mixer based action head for action prediction."""
+
+    def __init__(self, num_chunks: int, dim: int, depth: int, action_dim: int, expansion_factor: float = 4.0, expansion_factor_token: float = 1.0):
+        super().__init__()
+
+        # An MLP for token subsampling.
+        subsampler_hidden_dim = NUM_TOKENS * 2
+        self.token_subsampler = nn.Sequential(
+            nn.LayerNorm(NUM_TOKENS),
+            nn.Linear(NUM_TOKENS, subsampler_hidden_dim),
+            nn.ReLU(),
+            nn.Linear(subsampler_hidden_dim, num_chunks),
+        )
+
+        class TokenMixer(nn.Module):
+            """A wrapper for token mixing that handles transposing."""
+            def __init__(self, num_chunks: int, expansion_factor: float):
+                super().__init__()
+                self.ff = FeedForward(num_chunks, int(expansion_factor * num_chunks))
+
+            def forward(self, x: torch.Tensor) -> torch.Tensor:
+                return self.ff(x.transpose(1, 2)).transpose(1, 2)
+            
+
+        chan_ff = FeedForward(dim, int(expansion_factor_token * dim))
+
+        self.mixer_blocks = nn.ModuleList(
+            [
+                nn.Sequential(
+                    PreNormResidual(dim, TokenMixer(num_chunks, expansion_factor)),
+                    PreNormResidual(dim, chan_ff),
+                )
+                for _ in range(depth)
+            ]
+        )
+
+        self.layer_norm = nn.LayerNorm(dim)
+        self.action_predictor = nn.Linear(dim, action_dim)
+
+    def predict_action(
+        self,
+        actions_hidden_states: torch.Tensor,
+        proprio: Optional[torch.Tensor] = None,
+        proprio_projector: Optional[nn.Module] = None,
+        phase: str = "Inference",
+        ground_truth_actions: Optional[torch.Tensor] = None,
+    ) -> Tuple[torch.Tensor, Optional[torch.Tensor], torch.Tensor]:
+        
+        # We only use the last layer's hidden states for the mixer.
+        # actions_hidden_states shape: (B, num_layers, NUM_TOKENS + num_task_tokens, D)
+        # We need the action tokens from the last layer: (B, NUM_TOKENS, D)
+        last_layer_hidden_states = actions_hidden_states[:, -1, -NUM_TOKENS:, :]
+
+        # Subsample tokens using a linear projection (token-mixing).
+        # (B, NUM_TOKENS, D) -> (B, D, NUM_TOKENS)
+        x_transposed = last_layer_hidden_states.transpose(1, 2)
+        # (B, D, NUM_TOKENS) -> (B, D, NUM_ACTIONS_CHUNK)
+        subsampled = self.token_subsampler(x_transposed)
+        # (B, D, NUM_ACTIONS_CHUNK) -> (B, NUM_ACTIONS_CHUNK, D)
+        x = subsampled.transpose(1, 2)
+
+        for mixer_block in self.mixer_blocks:
+            x = mixer_block(x)
+
+        x = self.layer_norm(x)
+        predicted_actions = self.action_predictor(x)
+        
+        return predicted_actions, None, ground_truth_actions
 
 
 class RMSNorm(nn.Module):

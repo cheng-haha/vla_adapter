@@ -24,12 +24,13 @@ json_numpy.patch()
 from prismatic.extern.hf.configuration_prismatic import OpenVLAConfig
 from prismatic.extern.hf.modeling_prismatic import OpenVLAForActionPrediction
 from prismatic.extern.hf.processing_prismatic import PrismaticImageProcessor, PrismaticProcessor
-from prismatic.models.action_heads import L1RegressionActionHead
+from prismatic.models.action_heads import L1RegressionActionHead, MlpMixerHead
 from prismatic.models.film_vit_wrapper import FiLMedPrismaticVisionBackbone
 from prismatic.models.projectors import NoisyActionProjector, ProprioProjector
 from prismatic.vla.constants import (
     ACTION_DIM,
     ACTION_PROPRIO_NORMALIZATION_TYPE,
+    NUM_ACTIONS_CHUNK,
 )
 from prismatic.vla.datasets.rlds.utils.data_utils import NormalizationType
 
@@ -479,7 +480,7 @@ def get_noisy_action_projector(cfg: Any, llm_dim: int) -> NoisyActionProjector:
     return noisy_action_projector
 
 
-def get_action_head(cfg: Any, llm_dim: int) -> Union[L1RegressionActionHead]:
+def get_action_head(cfg: Any, llm_dim: int) -> Union[L1RegressionActionHead, MlpMixerHead]:
     """
     Get action head for continuous value prediction.
 
@@ -502,16 +503,33 @@ def get_action_head(cfg: Any, llm_dim: int) -> Union[L1RegressionActionHead]:
 
     # Initialize appropriate action head based on configuration
     if cfg.use_l1_regression:
-        action_head = L1RegressionActionHead(
-            input_dim=llm_dim, 
-            hidden_dim=llm_dim, 
-            action_dim=ACTION_DIM,
-            use_pro_version=cfg.use_pro_version,
-            action_probing=cfg.action_probing,
-            action_pooling_type=cfg.action_pooling_type,
-            only_simple_action_head=cfg.only_simple_action_head,
-            ensemble_hidden_state=cfg.ensemble_hidden_state
-        )
+        if hasattr(cfg, "use_mlp_mixer") and cfg.use_mlp_mixer:
+            action_head_class = MlpMixerHead
+            action_head_kwargs = {
+                "num_chunks": NUM_ACTIONS_CHUNK,
+                "dim": llm_dim,
+                "depth": cfg.mlp_mixer_depth,  # A reasonable default depth for the mixer
+                "action_dim": ACTION_DIM,
+            }
+        else:
+            action_head_class = L1RegressionActionHead
+            action_head_kwargs = {
+                "input_dim": llm_dim,
+                "hidden_dim": llm_dim,
+                "action_dim": ACTION_DIM,
+                "use_pro_version": cfg.use_pro_version,
+                "action_probing": cfg.action_probing,
+                "action_pooling_type": cfg.action_pooling_type,
+                "only_simple_action_head": cfg.only_simple_action_head,
+                "ensemble_hidden_state": cfg.ensemble_hidden_state,
+                "sim_expert_v2": getattr(cfg, "sim_expert_v2", False),
+                "add_sink_token": getattr(cfg, "add_sink_token", False),
+                "perturbation_type": cfg.perturbation_type,
+                "deep_supervise": cfg.deep_supervise,
+                "deep_supervise_ensemble": cfg.deep_supervise_ensemble,
+            }
+
+        action_head = action_head_class(**action_head_kwargs)
 
     else:
         raise ValueError("Either use_l1_regression or use_diffusion must be True")
