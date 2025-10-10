@@ -1261,10 +1261,11 @@ def finetune(cfg: FinetuneConfig) -> None:
         "next_actions_l1_loss": deque(maxlen=cfg.grad_accumulation_steps),
     }
 
+    vla.train()
     # Start training
     with tqdm.tqdm(total=cfg.max_steps, leave=False) as progress:
-        vla.train()
-        optimizer.zero_grad()
+        if not cfg.use_deep_recursion:
+            optimizer.zero_grad()
         for batch_idx, batch in enumerate(dataloader):
             if cfg.use_deep_recursion:
                 # Get ground-truth action labels
