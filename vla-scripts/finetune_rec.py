@@ -145,9 +145,9 @@ class FinetuneConfig:
     use_mlp_mixer: bool = False                      # If True, uses MlpMixerHead for action prediction
     mlp_mixer_depth: int = 2                         # Depth of the MLP-Mixer
     use_deep_recursion: bool = False                 # Whether to use deep recursion for action prediction
-    n_supervision: int = 3                           # Number of supervision steps for the policy
-    n_recursion: int = 6                             # Number of latent recursion steps
-    T_recursion: int = 3                             # Number of deep recursion steps
+    n_supervision: int = 6                           # Number of supervision steps for the policy
+    n_recursion: int = 1                             # Number of latent recursion steps
+    T_recursion: int = 1                             # Number of deep recursion steps
 
     # Perturbations
     perturbation_type: str = "none"                    # Type of perturbation to apply during training. Options: "none", "learnable_gaussian", "random_gaussian", "dropout", "adversarial", "condition_aware", "feature_mixup", "token_dropout"
@@ -1152,7 +1152,7 @@ def finetune(cfg: FinetuneConfig) -> None:
         
         action_head_params = [p for p in action_head.parameters() if p.requires_grad]
         
-        optimizer_vlm = AdamW(vlm_params, lr=cfg.learning_rate)
+        optimizer_vlm = AdamW(vlm_params + action_head_params, lr=cfg.learning_rate)
         optimizer_policy = AdamW(action_head_params, lr=cfg.policy_learning_rate)
         
         original_lr_vlm = optimizer_vlm.param_groups[0]["lr"]
@@ -1300,36 +1300,36 @@ def finetune(cfg: FinetuneConfig) -> None:
                 multi_layer_hidden_states = torch.cat(multi_layer_hidden_states, dim=1)
 
                 # === 1. Update Policy ===
-                for i in range(cfg.n_supervision):
-                    predicted_actions, _, _ = action_head.module.predict_action(
-                        multi_layer_hidden_states,
-                        proprio=batch["proprio"] if cfg.use_proprio else None,
-                        proprio_projector=proprio_projector if cfg.use_proprio else None,
-                        phase="PolicyTraining",
-                        ground_truth_actions=ground_truth_actions,
-                    )
-                    loss_policy = F.l1_loss(predicted_actions, ground_truth_actions)
-                    loss_policy.backward()
-                    optimizer_policy.step()
-                    optimizer_policy.zero_grad()
+                # for i in range(cfg.n_supervision):
+                #     predicted_actions, _, _ = action_head.module.predict_action(
+                #         multi_layer_hidden_states,
+                #         proprio=batch["proprio"] if cfg.use_proprio else None,
+                #         proprio_projector=proprio_projector if cfg.use_proprio else None,
+                #         phase="PolicyTraining",
+                #         ground_truth_actions=ground_truth_actions,
+                #     )
+                #     loss_policy = F.l1_loss(predicted_actions, ground_truth_actions)
+                #     loss_policy.backward()
+                #     optimizer_policy.step()
+                #     optimizer_policy.zero_grad()
 
-                    # Log losses for the last supervision step to avoid excessive printing
-                    if i == cfg.n_supervision - 1:
-                        with torch.no_grad():
-                            ground_truth_curr_action = ground_truth_actions[:, 0]
-                            predicted_curr_action = predicted_actions[:, 0]
-                            ground_truth_next_actions = ground_truth_actions[:, 1:]
-                            predicted_next_actions = predicted_actions[:, 1:]
-                            curr_action_l1_loss = F.l1_loss(ground_truth_curr_action, predicted_curr_action)
-                            next_actions_l1_loss = F.l1_loss(ground_truth_next_actions, predicted_next_actions)
-                            print(
-                                f"Policy Losses - Current Action: {curr_action_l1_loss.item():.6f}, "
-                                f"Next Actions: {next_actions_l1_loss.item():.6f}"
-                            )
+                #     # Log losses for the last supervision step to avoid excessive printing
+                #     if i == cfg.n_supervision - 1:
+                #         with torch.no_grad():
+                #             ground_truth_curr_action = ground_truth_actions[:, 0]
+                #             predicted_curr_action = predicted_actions[:, 0]
+                #             ground_truth_next_actions = ground_truth_actions[:, 1:]
+                #             predicted_next_actions = predicted_actions[:, 1:]
+                #             curr_action_l1_loss = F.l1_loss(ground_truth_curr_action, predicted_curr_action)
+                #             next_actions_l1_loss = F.l1_loss(ground_truth_next_actions, predicted_next_actions)
+                #             print(
+                #                 f"Policy Losses - Current Action: {curr_action_l1_loss.item():.6f}, "
+                #                 f"Next Actions: {next_actions_l1_loss.item():.6f}"
+                #             )
                 
                 # === 2. Update VLM ===
-                for param in action_head.parameters():
-                    param.requires_grad = False
+                # for param in action_head.parameters():
+                #     param.requires_grad = False
                 
                 predicted_actions, _, _ = action_head.module.predict_action(
                     multi_layer_hidden_states,
@@ -1357,11 +1357,11 @@ def finetune(cfg: FinetuneConfig) -> None:
                 optimizer_vlm.step()
                 optimizer_vlm.zero_grad()
 
-                for param in action_head.parameters():
-                    param.requires_grad = True
+                # for param in action_head.parameters():
+                #     param.requires_grad = True
 
                 # For logging purposes
-                metrics = {"loss_value": (loss_policy.item() + loss_vlm.item()) / 2}
+                metrics = {"loss_value": (loss_vlm.item()) / 2}
                 
                 # Store recent train metrics
                 for metric_name, value in metrics.items():

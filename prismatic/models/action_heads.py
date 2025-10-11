@@ -29,6 +29,7 @@ class ActionTokenPooling(nn.Module):
 
         if pooling_type == "attention":
             self.attention = nn.Sequential(
+                nn.LayerNorm(input_dim),
                 nn.Linear(input_dim, 128),
                 nn.ReLU(),
                 nn.Linear(128, 1),
@@ -351,7 +352,7 @@ class L1RegressionActionHead(nn.Module):
                 action_dim=self.action_dim,
                 latent_dim=hidden_dim,
                 num_chunks=NUM_ACTIONS_CHUNK,
-                mixer_depth=2, # A reasonable default
+                mixer_depth=4, # A reasonable default
             )
             return
 
@@ -1122,85 +1123,71 @@ class GeneralMixer(nn.Module):
 
 class PolicyNetwork(nn.Module):
     """
-    A lightweight, stackable FFN head with residual connections.
-    Can be used as a full action head or as a latent feature refiner.
-    """
-    def __init__(self, input_dim: int, hidden_dim: int, action_dim: int, num_layers: int = 4, ffn_dim_multiplier: int = 1):
-        super().__init__()
-        
-        self.net = nn.ModuleList()
-        for _ in range(num_layers):
-            self.net.append(nn.Sequential(
-                nn.LayerNorm(hidden_dim),
-                nn.Linear(hidden_dim, hidden_dim * ffn_dim_multiplier),
-                nn.ReLU(),
-                nn.Linear(hidden_dim * ffn_dim_multiplier, hidden_dim),
-            ))
-
-        self.connector = nn.Sequential(
-            nn.LayerNorm(input_dim),
-            nn.Linear(input_dim, hidden_dim),
-            nn.ReLU(),
-        )
-        self.output_head = nn.Sequential(
-            nn.LayerNorm(hidden_dim),
-            nn.Linear(hidden_dim, action_dim)
-        )
-
-    def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
-        """
-        Forward pass.
-
-        Args:
-            x (torch.Tensor): Input tensor of shape (B, NUM_ACTIONS_CHUNK, D).
-
-        Returns:
-            Tuple[torch.Tensor, torch.Tensor]: A tuple containing:
-                - coarse_action (torch.Tensor): Coarse action prediction of shape (B, NUM_ACTIONS_CHUNK, ACTION_DIM).
-                - representation (torch.Tensor): Intermediate representation of shape (B, NUM_ACTIONS_CHUNK, D).
-        """
-        representation = self.connector(x)
-        for block in self.net:
-            representation = representation + block(representation)
-
-        coarse_action = self.output_head(representation)
-        return coarse_action, representation
-
-class ActionRefiner(nn.Module):
-    """
-    An action refiner module using MLP-Mixer. It performs one step of refinement.
-    z_new = mixer(x, y, z)
-    y_new = head(z_new)
+    A unified policy network with a shared MLP-Mixer core that implements two refinement steps:
+    1. Latent refinement: z_new = f(x, y, z)
+    2. Action refinement: y_new = g(y, z)
     """
 
     def __init__(self, vlm_dim: int, action_dim: int, latent_dim: int, num_chunks: int, mixer_depth: int):
         super().__init__()
-        # 
-        self.action_refiner = PolicyNetwork(
-            input_dim=vlm_dim + action_dim + latent_dim,
-            hidden_dim=latent_dim,  # mixer operates in latent space
-            action_dim=action_dim,
-            num_layers=mixer_depth,
-            ffn_dim_multiplier=1
+
+        # --- Shared MLP-Mixer Core ---
+        class TokenMixer(nn.Module):
+            """A wrapper for token mixing that handles transposing."""
+            def __init__(self, num_chunks: int, expansion_factor: float):
+                super().__init__()
+                self.ff = FeedForward(num_chunks, int(expansion_factor * num_chunks))
+
+            def forward(self, x: torch.Tensor) -> torch.Tensor:
+                return self.ff(x.transpose(1, 2)).transpose(1, 2)
+            
+        chan_ff = FeedForward(latent_dim, int(1.0 * latent_dim))
+        self.mixer_blocks = nn.ModuleList(
+            [
+                nn.Sequential(
+                    PreNormResidual(latent_dim, TokenMixer(num_chunks, 1.0)),
+                    PreNormResidual(latent_dim, chan_ff),
+                )
+                for _ in range(mixer_depth)
+            ]
         )
 
-    def forward(self, x: torch.Tensor, y: torch.Tensor, z: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
-        """
-        Performs one step of recursive refinement.
+        # --- Projections for Latent Refinement ---
+        self.x_proj = nn.Linear(vlm_dim, latent_dim)
+        self.y_proj = nn.Linear(action_dim, latent_dim)
+        self.latent_fusion_norm = nn.LayerNorm(latent_dim)
 
-        Args:
-            x (torch.Tensor): Query embedding from VLM.
-            y (torch.Tensor): Current action prediction.
-            z (torch.Tensor): Current latent representation.
+        # --- Projections for Action Refinement ---
+        self.action_fusion_norm = nn.LayerNorm(latent_dim)
+        self.action_refiner_output_head = nn.Sequential(
+            nn.LayerNorm(latent_dim),
+            nn.Linear(latent_dim, action_dim)
+        )
+    
+    def refine_latent(self, x: torch.Tensor, y: torch.Tensor, z: torch.Tensor) -> torch.Tensor:
+        """Refines latent state z by fusing projections of x and y with z via a residual connection."""
+        # Project inputs and add to z, creating a residual connection for stable recursion.
+        fused_input = self.x_proj(x) + self.y_proj(y) + z
+        z_refined = self.latent_fusion_norm(fused_input)
+        
+        # Pass through shared mixer blocks
+        for block in self.mixer_blocks:
+            z_refined = block(z_refined)
+        return z_refined
 
-        Returns:
-            Tuple[torch.Tensor, torch.Tensor]: A tuple containing:
-                - y_new (torch.Tensor): The refined action.
-                - z_new (torch.Tensor): The refined latent representation.
-        """
-        inp = torch.cat([x, y, z], dim=-1)
-        y_new, z_new = self.action_refiner(inp)
-        return y_new, z_new
+    def refine_action(self, y: torch.Tensor, z: torch.Tensor) -> torch.Tensor:
+        """Refines action y by fusing a projection of y with z via a residual connection."""
+        # Project y and add to z, creating a residual connection.
+        fused_input = self.y_proj(y) + z
+        y_refined = self.action_fusion_norm(fused_input)
+        
+        # Pass through shared mixer blocks
+        for block in self.mixer_blocks:
+            y_refined = block(y_refined)
+            
+        # Project output to action space
+        y_refined = self.action_refiner_output_head(y_refined)
+        return y_refined
 
 
 class RecursiveActionHead(nn.Module):
@@ -1209,11 +1196,17 @@ class RecursiveActionHead(nn.Module):
     def __init__(self, vlm_dim: int, action_dim: int, latent_dim: int, num_chunks: int, mixer_depth: int):
         super().__init__()
         self.latent_dim = latent_dim
-        self.action_refiner = ActionRefiner(vlm_dim, action_dim, latent_dim, num_chunks, mixer_depth)
+        self.policy_network = PolicyNetwork(vlm_dim, action_dim, latent_dim, num_chunks, mixer_depth)
 
     def latent_recursion(self, x: torch.Tensor, y: torch.Tensor, z: torch.Tensor, n: int = 6) -> Tuple[torch.Tensor, torch.Tensor]:
-        for _ in range(n):  # latent recursion
-            y, z = self.action_refiner(x, y, z)
+        """Implements the latent recursion from the pseudocode."""
+        # First, a loop to refine the latent state z, keeping y constant.
+        for _ in range(n):
+            z = self.policy_network.refine_latent(x, y, z)
+        
+        # Then, a single step to refine the action y using the new z.
+        y = self.policy_network.refine_action(y, z)
+        
         return y, z
 
     def deep_recursion(self, x: torch.Tensor, y: torch.Tensor, z: torch.Tensor, n: int = 6, T: int = 3) -> Tuple[Tuple[torch.Tensor, torch.Tensor], torch.Tensor]:
