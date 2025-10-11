@@ -615,6 +615,12 @@ class PrismaticForConditionalGeneration(PrismaticPreTrainedModel):
             # Get visual features
             projected_patch_embeddings = self._process_vision_features(pixel_values, language_embeddings, use_film)
 
+            # Add proprioceptive state if provided
+            projected_patch_embeddings = self._process_proprio_features(
+                projected_patch_embeddings, proprio, proprio_projector
+            )
+
+
             # Process action embeddings
             if proprio_as_queries:
                 prop_action_queries = proprio_projector(proprio) # (b,h)
@@ -950,9 +956,15 @@ class OpenVLAForActionPrediction(PrismaticForConditionalGeneration):
         projected_patch_embeddings = self._process_vision_features(pixel_values, language_embeddings, use_film)
 
         # Add proprioceptive features if provided
+        # use_proprio = proprio_projector is not None and proprio is not None
+        # if use_proprio:
+        #     proprio = torch.Tensor(proprio).to(projected_patch_embeddings.device, dtype=projected_patch_embeddings.dtype)
         use_proprio = proprio_projector is not None and proprio is not None
         if use_proprio:
             proprio = torch.Tensor(proprio).to(projected_patch_embeddings.device, dtype=projected_patch_embeddings.dtype)
+            projected_patch_embeddings = self._process_proprio_features(
+                projected_patch_embeddings, proprio, proprio_projector
+            )
 
         # Calculate number of patches (including proprio token and/or diffusion timestep embedding if present)
         NUM_PATCHES = self.vision_backbone.get_num_patches() * self.vision_backbone.get_num_images_in_input()
