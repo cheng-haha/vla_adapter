@@ -1156,9 +1156,10 @@ def finetune(cfg: FinetuneConfig) -> None:
 
     # Create learning rate scheduler
     # 1. MultiStepLR
+    assert cfg.max_steps > 2*cfg.num_steps_before_decay, "max_steps must be greater than 2*num_steps_before_decay"
     scheduler = MultiStepLR(
         optimizer,
-        milestones=[cfg.num_steps_before_decay],  # Number of steps after which LR will change
+        milestones=[cfg.num_steps_before_decay, 2*cfg.num_steps_before_decay],  # Number of steps after which LR will change
         gamma=0.1,  # Multiplicative factor of learning rate decay
     )
     # 2. CosineAnnealingLR
