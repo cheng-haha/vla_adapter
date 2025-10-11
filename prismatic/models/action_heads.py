@@ -297,7 +297,7 @@ class L1RegressionActionHead(nn.Module):
         input_dim=4096,
         hidden_dim=4096,
         action_dim=7,
-        num_task_tokens=512,
+        num_task_tokens=513,
         use_pro_version=False,
         action_probing=False,
         action_pooling_type="attention",
