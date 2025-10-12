@@ -1156,7 +1156,7 @@ def finetune(cfg: FinetuneConfig) -> None:
     # 1. MultiStepLR
     scheduler = MultiStepLR(
         optimizer,
-        milestones=[cfg.num_steps_before_decay, 2*cfg.num_steps_before_decay],  # Number of steps after which LR will change
+        milestones=[cfg.num_steps_before_decay],  # Number of steps after which LR will change
         gamma=0.1,  # Multiplicative factor of learning rate decay
     )
     # 2. CosineAnnealingLR
@@ -1251,7 +1251,7 @@ def finetune(cfg: FinetuneConfig) -> None:
         "next_actions_accuracy": deque(maxlen=cfg.grad_accumulation_steps),
         "next_actions_l1_loss": deque(maxlen=cfg.grad_accumulation_steps),
     }
-
+    print(f'Data length is: {len(dataloader)}')
     # Start training
     with tqdm.tqdm(total=cfg.max_steps, leave=False) as progress:
         vla.train()

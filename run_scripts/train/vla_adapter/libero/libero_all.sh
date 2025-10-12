@@ -14,7 +14,7 @@ export WANDB_MODE=offline
 export PYTHONPATH=$ROOT_PATH/vla_projects/$PROJECT_PATH
 #========== Training Configuration ==========#
 # Dataset and paths
-data_name=libero_10_no_noops
+data_name=libero_4_task_suites_no_noops
 data_root_dir=$ROOT_PATH/datasets/openvla/modified_libero_rlds
 vlm_path=$ROOT_PATH/ai_models/Stanford-ILIAD/prism-qwen25-extra-dinosiglip-224px-0_5b
 config_file_path=pretrained_models/configs
@@ -23,8 +23,8 @@ config_file_path=pretrained_models/configs
 batch_size=16
 grad_accumulation_steps=1
 learning_rate=2e-4
-max_steps=60005
-num_steps_before_decay=50000
+max_steps=100005
+num_steps_before_decay=90000
 save_freq=10000
 
 # Model configuration
@@ -40,13 +40,14 @@ save_latest_checkpoint_only=False
 merge_lora_during_training=True
 use_pro_version=True
 only_simple_action_head=True
+action_pooling_type=mean
 # Wandb settings
 wandb_entity=chenghaha
 wandb_project=vla_adapter
 
 # Generate timestamp and run ID
 current_time=$(date +"%Y%m%d_%H%M%S")
-run_id_note="sim-attention"
+run_id_note="sim-mean"
 
 # Build MODE string with important configuration variables (excluding those already in run_id)
 # run_id already includes: config_file_path, dataset_name, batch_size*grad_accumulation_steps, learning_rate, lora_rank, image_aug
@@ -85,7 +86,8 @@ torchrun --standalone --nnodes 1 --nproc-per-node 4 vla-scripts/finetune.py \
   --wandb_entity "$wandb_entity" \
   --wandb_project "$wandb_project" \
   --run_id_note $run_id_note \
-  --only_simple_action_head $only_simple_action_head
+  --only_simple_action_head $only_simple_action_head \
+  --action_pooling_type $action_pooling_type
 
 echo "Training started with run ID: $run_id_note"
 echo "Output directory: $run_root_dir"

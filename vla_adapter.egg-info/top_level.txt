@@ -1,7 +1,12 @@
+calvin
 eval_logs
 experiments
 figure
+logs
+outputs
 pretrained_models
 prismatic
+run_scripts
 scripts
 vla-scripts
+wandb

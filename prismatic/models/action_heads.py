@@ -307,7 +307,7 @@ class L1RegressionActionHead(nn.Module):
         use_deep_recursion=False,
         n_recursion=6,
         T_recursion=3,
-        perturbation_type: str = "learnable_gaussian",
+        perturbation_type: str = None,
         perturbation_std: float = 0.02,
         perturbation_dropout_p: float = 0.1,
         adversarial_step_size: float = 1e-3,
