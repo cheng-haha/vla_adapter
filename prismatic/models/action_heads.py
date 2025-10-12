@@ -50,6 +50,11 @@ class ActionTokenPooling(nn.Module):
                 self.chunk_sizes = [self.num_tokens]
             
             assert sum(self.chunk_sizes) == self.num_tokens, "Sum of chunk sizes must equal total number of tokens."
+        elif pooling_type == "linear_fusion":
+            if self.num_tokens % self.num_chunks != 0:
+                raise ValueError("For linear_fusion pooling, num_tokens must be divisible by num_chunks.")
+            tokens_per_chunk = self.num_tokens // self.num_chunks
+            self.fusion_layer = nn.Linear(tokens_per_chunk, 1)
         elif pooling_type == "mixer":
             self.mixer_mlp = nn.Sequential(
                 nn.LayerNorm(self.num_tokens),
@@ -102,6 +107,22 @@ class ActionTokenPooling(nn.Module):
                 start_idx = end_idx
             return torch.cat(outputs, dim=1)
         
+        elif self.pooling_type == "linear_fusion":
+            tokens_per_chunk = self.num_tokens // self.num_chunks
+            
+            # Reshape to (B, NUM_CHUNKS, TOKENS_PER_CHUNK, D)
+            x_reshaped = x.reshape(B, self.num_chunks, tokens_per_chunk, D)
+            
+            # Transpose to (B, NUM_CHUNKS, D, TOKENS_PER_CHUNK) to apply linear layer across tokens
+            x_transposed = x_reshaped.transpose(2, 3)
+            
+            # Fuse tokens in each chunk -> (B, NUM_CHUNKS, D, 1)
+            fused = self.fusion_layer(x_transposed)
+            
+            # Squeeze to get final shape (B, NUM_CHUNKS, D)
+            pooled = fused.squeeze(-1)
+            return pooled
+            
         elif self.pooling_type == "mixer":
             # (B, NUM_TOKENS, D) -> (B, D, NUM_TOKENS)
             x_transposed = x.transpose(1, 2)
