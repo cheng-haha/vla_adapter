@@ -27,6 +27,8 @@ class ActionTokenPooling(nn.Module):
         self.num_chunks = num_chunks
         self.input_dim = input_dim
 
+        self.position_embedding = nn.Parameter(torch.randn(1, self.num_chunks, self.input_dim))
+
         if pooling_type == "attention":
             self.attention = nn.Sequential(
                 nn.Linear(input_dim, 128),
@@ -84,7 +86,6 @@ class ActionTokenPooling(nn.Module):
                 pooled = x.mean(dim=2)
             else: # max
                 pooled, _ = x.max(dim=2)
-            return pooled
 
         elif self.pooling_type == "attention":
             if self.num_tokens % self.num_chunks != 0:
@@ -93,9 +94,9 @@ class ActionTokenPooling(nn.Module):
             x_reshaped = x.reshape(B * self.num_chunks, tokens_per_chunk, D)
 
             attn_weights = torch.softmax(self.attention(x_reshaped), dim=1)
-            pooled = torch.sum(x_reshaped * attn_weights, dim=1)
+            pooled_flat = torch.sum(x_reshaped * attn_weights, dim=1)
             
-            return pooled.reshape(B, self.num_chunks, D)
+            pooled = pooled_flat.reshape(B, self.num_chunks, D)
 
         elif self.pooling_type == "weighted":
             outputs = []
@@ -105,7 +106,7 @@ class ActionTokenPooling(nn.Module):
                 chunk = x[:, start_idx:end_idx, :]
                 outputs.append(chunk.mean(dim=1, keepdim=True))
                 start_idx = end_idx
-            return torch.cat(outputs, dim=1)
+            pooled = torch.cat(outputs, dim=1)
         
         elif self.pooling_type == "linear_fusion":
             tokens_per_chunk = self.num_tokens // self.num_chunks
@@ -121,18 +122,19 @@ class ActionTokenPooling(nn.Module):
             
             # Squeeze to get final shape (B, NUM_CHUNKS, D)
             pooled = fused.squeeze(-1)
-            return pooled
             
         elif self.pooling_type == "mixer":
             # (B, NUM_TOKENS, D) -> (B, D, NUM_TOKENS)
             x_transposed = x.transpose(1, 2)
             # (B, D, NUM_TOKENS) -> (B, D, NUM_ACTIONS_CHUNK)
-            pooled = self.mixer_mlp(x_transposed)
+            pooled_transposed = self.mixer_mlp(x_transposed)
             # (B, D, NUM_ACTIONS_CHUNK) -> (B, NUM_ACTIONS_CHUNK, D)
-            return pooled.transpose(1, 2)
+            pooled = pooled_transposed.transpose(1, 2)
 
         else:
             raise ValueError(f"Unknown pooling type: {self.pooling_type}")
+
+        return pooled + self.position_embedding
 
 
 class SimpleActionHead(nn.Module):
@@ -140,7 +142,7 @@ class SimpleActionHead(nn.Module):
     A lightweight, stackable FFN head with residual connections.
     Can be used as a full action head or as a latent feature refiner.
     """
-    def __init__(self, hidden_dim: int, action_dim: int, num_layers: int = 2, ffn_dim_multiplier: int = 1):
+    def __init__(self, hidden_dim: int, action_dim: int, num_layers: int = 8, ffn_dim_multiplier: int = 1):
         super().__init__()
         
         self.net = nn.ModuleList()
