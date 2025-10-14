@@ -94,6 +94,7 @@ class FinetuneConfig:
     # Training configuration
     batch_size: int = 8                              # Batch size per device (total batch size = batch_size * num GPUs)
     learning_rate: float = 5e-4                      # Learning rate
+    action_head_learning_rate: Optional[float] = None # Learning rate for the action head, if different from the main LR.
     lr_warmup_steps: int =  0                        # Number of steps to warm up learning rate (from 10% to 100%)
     num_steps_before_decay: int = 100000             # Number of steps before LR decays by 10x
     grad_accumulation_steps: int = 1                 # Number of gradient accumulation steps
@@ -1140,17 +1141,27 @@ def finetune(cfg: FinetuneConfig) -> None:
     # If we have proprio inputs, a single proprio embedding is appended to the end of the vision patch embeddings
 
     # Instantiate optimizer
-    trainable_params = [param for param in vla.parameters() if param.requires_grad]
+    vla_params = [p for p in vla.parameters() if p.requires_grad]
+    param_groups = [{"params": vla_params, "lr": cfg.learning_rate}]
+    print(f"# trainable params in vla: {sum(p.numel() for p in vla_params)}")
+
     if cfg.use_l1_regression:
-        trainable_params += [param for param in action_head.parameters() if param.requires_grad]
+        action_head_params = [p for p in action_head.parameters() if p.requires_grad]
+        action_head_lr = cfg.action_head_learning_rate if cfg.action_head_learning_rate is not None else cfg.learning_rate
+        param_groups.append({"params": action_head_params, "lr": action_head_lr})
+        print(f"# trainable params in action_head: {sum(p.numel() for p in action_head_params)}")
 
     if cfg.use_proprio:
-        trainable_params += [param for param in proprio_projector.parameters() if param.requires_grad]
-    print(f"# total trainable params: {sum(p.numel() for p in trainable_params)}")
-    optimizer = AdamW(  trainable_params, lr=cfg.learning_rate )
+        proprio_params = [p for p in proprio_projector.parameters() if p.requires_grad]
+        param_groups.append({"params": proprio_params, "lr": cfg.learning_rate})
+        print(f"# trainable params in proprio_projector: {sum(p.numel() for p in proprio_params)}")
 
-    # Record original learning rate
-    original_lr = optimizer.param_groups[0]["lr"]
+    total_params = sum(sum(p.numel() for p in group["params"]) for group in param_groups)
+    print(f"# total trainable params: {total_params}")
+    optimizer = AdamW(param_groups)
+
+    # Record original learning rates for each parameter group
+    original_lrs = [group["lr"] for group in optimizer.param_groups]
 
     # Create learning rate scheduler
     # 1. MultiStepLR
@@ -1300,20 +1311,17 @@ def finetune(cfg: FinetuneConfig) -> None:
             # [If applicable] Linearly warm up learning rate from 10% to 100% of original
             if cfg.lr_warmup_steps > 0:
                 lr_progress = min((gradient_step_idx + 1) / cfg.lr_warmup_steps, 1.0)  # Cap at 1.0
-                current_lr = original_lr * (0.1 + 0.9 * lr_progress)
-                for param_group in optimizer.param_groups:
-                    param_group["lr"] = current_lr
+                for i, param_group in enumerate(optimizer.param_groups):
+                    original_lr = original_lrs[i]
+                    param_group["lr"] = original_lr * (0.1 + 0.9 * lr_progress)
 
             if distributed_state.is_main_process and gradient_step_idx % cfg.wandb_log_freq == 0:
                 # Log the learning rate
                 # Make sure to do this AFTER any learning rate modifications (e.g., warmup/decay)
-                wandb.log(
-                    {
-                        "VLA Train/Learning Rate": scheduler.get_last_lr()[0],
-                    },
-                    step=log_step,
-                )
-                print(f"Step {log_step} - Learning Rate: {scheduler.get_last_lr()[0]:.10e}")
+                lrs = scheduler.get_last_lr()
+                log_dict = {f"VLA Train/Learning Rate Group {i}": lr for i, lr in enumerate(lrs)}
+                wandb.log(log_dict, step=log_step)
+                print(f"Step {log_step} - Learning Rates: {[f'{lr:.10e}' for lr in lrs]}")
 
             # Optimizer and LR scheduler step
             if (batch_idx + 1) % cfg.grad_accumulation_steps == 0:
