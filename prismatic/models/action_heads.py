@@ -374,7 +374,7 @@ class L1RegressionActionHead(nn.Module):
                 action_dim=self.action_dim,
                 latent_dim=hidden_dim,
                 num_chunks=NUM_ACTIONS_CHUNK,
-                mixer_depth=2, # A reasonable default
+                mixer_depth=4, # A reasonable default
             )
             return
 
@@ -1200,7 +1200,7 @@ class ActionRefiner(nn.Module):
         super().__init__()
         # 
         self.action_refiner = PolicyNetwork(
-            input_dim=vlm_dim + action_dim + latent_dim,
+            input_dim=vlm_dim,
             hidden_dim=latent_dim,  # mixer operates in latent space
             action_dim=action_dim,
             num_layers=mixer_depth,
@@ -1221,8 +1221,8 @@ class ActionRefiner(nn.Module):
                 - y_new (torch.Tensor): The refined action.
                 - z_new (torch.Tensor): The refined latent representation.
         """
-        inp = torch.cat([x, y, z], dim=-1)
-        y_new, z_new = self.action_refiner(inp)
+        inp             = x + z
+        y_new, z_new    = self.action_refiner(inp)
         return y_new, z_new
 
 

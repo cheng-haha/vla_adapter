@@ -22,9 +22,10 @@ config_file_path=pretrained_models/configs
 # Training parameters
 batch_size=16
 grad_accumulation_steps=1
-learning_rate=2e-4
+learning_rate=5e-5
+action_head_learning_rate=5e-4
 max_steps=60005
-num_steps_before_decay=30000
+num_steps_before_decay=60000
 save_freq=10000
 
 # Model configuration
@@ -87,7 +88,8 @@ torchrun --standalone --nnodes 1 --nproc-per-node 4 vla-scripts/finetune.py \
   --wandb_project "$wandb_project" \
   --run_id_note $run_id_note \
   --only_simple_action_head $only_simple_action_head \
-  --action_pooling_type $action_pooling_type
+  --action_pooling_type $action_pooling_type \
+  --action_head_learning_rate $action_head_learning_rate
 
 echo "Training started with run ID: $run_id_note"
 echo "Output directory: $run_root_dir"

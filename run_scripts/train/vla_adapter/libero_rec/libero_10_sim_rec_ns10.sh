@@ -2,8 +2,8 @@
 ###
  # @Description: 
  # @Date: 2025-09-25 22:13:40
- # @LastEditTime: 2025-10-03 16:17:44
- # @FilePath: \vla_adapter\run_scripts\train\vla_adapter\libero\libero_10_sim.sh
+ # @LastEditTime: 2025-10-11 01:52:42
+ # @FilePath: \vla_adapter\run_scripts\train\vla_adapter\libero_rec\debug_libero_10_rec.sh
 ### 
 
 #========== Basic Settings ==========#
@@ -22,9 +22,9 @@ config_file_path=pretrained_models/configs
 # Training parameters
 batch_size=16
 grad_accumulation_steps=1
-learning_rate=2e-4
+learning_rate=5e-5
 max_steps=60005
-num_steps_before_decay=60000
+num_steps_before_decay=30000
 save_freq=10000
 
 # Model configuration
@@ -39,14 +39,16 @@ image_aug=True
 save_latest_checkpoint_only=False
 merge_lora_during_training=True
 use_pro_version=True
-only_simple_action_head=True
+use_deep_recursion=True
+action_pooling_type=linear_fusion
+n_supervision=1
 # Wandb settings
 wandb_entity=chenghaha
 wandb_project=vla_adapter
 
 # Generate timestamp and run ID
 current_time=$(date +"%Y%m%d_%H%M%S")
-run_id_note="sim-attention"
+run_id_note="sim_rec_ns${n_supervision}"
 
 # Build MODE string with important configuration variables (excluding those already in run_id)
 # run_id already includes: config_file_path, dataset_name, batch_size*grad_accumulation_steps, learning_rate, lora_rank, image_aug
@@ -59,7 +61,7 @@ run_root_dir="outputs/${data_name}/${MODE}-$current_time"
 mkdir -p logs
 
 #========== Training Execution ==========#
-torchrun --standalone --nnodes 1 --nproc-per-node 4 vla-scripts/finetune.py \
+torchrun --standalone --nnodes 1 --nproc-per-node 4 vla-scripts/finetune_rec.py \
   --vlm_path $vlm_path \
   --config_file_path $config_file_path \
   --data_root_dir $data_root_dir \
@@ -85,7 +87,9 @@ torchrun --standalone --nnodes 1 --nproc-per-node 4 vla-scripts/finetune.py \
   --wandb_entity "$wandb_entity" \
   --wandb_project "$wandb_project" \
   --run_id_note $run_id_note \
-  --only_simple_action_head $only_simple_action_head
+  --use_deep_recursion $use_deep_recursion \
+  --action_pooling_type $action_pooling_type \
+  --n_supervision $n_supervision
 
 echo "Training started with run ID: $run_id_note"
 echo "Output directory: $run_root_dir"

@@ -22,7 +22,7 @@ config_file_path=pretrained_models/configs
 # Training parameters
 batch_size=16
 grad_accumulation_steps=1
-learning_rate=2e-4
+learning_rate=5e-5
 max_steps=60005
 num_steps_before_decay=30000
 save_freq=10000
@@ -40,13 +40,15 @@ save_latest_checkpoint_only=False
 merge_lora_during_training=True
 use_pro_version=True
 use_deep_recursion=True
+action_pooling_type=linear_fusion
+n_supervision=3
 # Wandb settings
 wandb_entity=chenghaha
 wandb_project=vla_adapter
 
 # Generate timestamp and run ID
 current_time=$(date +"%Y%m%d_%H%M%S")
-run_id_note="sim_rec"
+run_id_note="sim_rec_ns${n_supervision}"
 
 # Build MODE string with important configuration variables (excluding those already in run_id)
 # run_id already includes: config_file_path, dataset_name, batch_size*grad_accumulation_steps, learning_rate, lora_rank, image_aug
@@ -86,6 +88,8 @@ torchrun --standalone --nnodes 1 --nproc-per-node 4 vla-scripts/finetune_rec.py 
   --wandb_project "$wandb_project" \
   --run_id_note $run_id_note \
   --use_deep_recursion $use_deep_recursion \
+  --action_pooling_type $action_pooling_type \
+  --n_supervision $n_supervision
 
 echo "Training started with run ID: $run_id_note"
 echo "Output directory: $run_root_dir"

@@ -214,8 +214,8 @@ OXE_NAMED_MIXTURES: Dict[str, List[Tuple[str, float]]] = {
     ],
     
     # === calvin_abc datasets ===
-    "calvin_abc": [
-        ("calvin_abc",1.0)
+    "calvin_abc_rlds": [
+        ("calvin_abc_rlds",1.0)
     ],
 
     # === ALOHA Fine-Tuning Datasets ===

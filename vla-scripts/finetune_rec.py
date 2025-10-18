@@ -93,7 +93,7 @@ class FinetuneConfig:
 
     # Training configuration
     batch_size: int = 8                              # Batch size per device (total batch size = batch_size * num GPUs)
-    learning_rate: float = 5e-4                      # Learning rate
+    learning_rate: float = 5e-5                      # Learning rate
     policy_learning_rate: float = 5e-4               # Learning rate for policy network
     lr_warmup_steps: int =  0                        # Number of steps to warm up learning rate (from 10% to 100%)
     num_steps_before_decay: int = 100000             # Number of steps before LR decays by 10x
@@ -145,7 +145,7 @@ class FinetuneConfig:
     use_mlp_mixer: bool = False                      # If True, uses MlpMixerHead for action prediction
     mlp_mixer_depth: int = 2                         # Depth of the MLP-Mixer
     use_deep_recursion: bool = False                 # Whether to use deep recursion for action prediction
-    n_supervision: int = 3                           # Number of supervision steps for the policy
+    n_supervision: int = 6                           # Number of supervision steps for the policy
     n_recursion: int = 6                             # Number of latent recursion steps
     T_recursion: int = 3                             # Number of deep recursion steps
 
